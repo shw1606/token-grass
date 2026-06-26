@@ -23,6 +23,6 @@ struct GrassWidgetView: View {
 
     var body: some View {
         let grid = DateGrid.makeGrid(usage: entry.snapshot.usageByDay, weeks: 26)
-        PackedGrassView(grid: grid, theme: .claudeOrange, gapRatio: 0.18)
+        PackedGrassView(grid: grid, theme: .claudeOrange, gapRatio: 0.26)
     }
 }

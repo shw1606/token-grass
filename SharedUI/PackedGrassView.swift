@@ -9,7 +9,7 @@ public struct PackedGrassView: View {
     private let theme: GrassTheme
     private let gapRatio: CGFloat
 
-    public init(grid: GrassGrid, theme: GrassTheme = .claudeOrange, gapRatio: CGFloat = 0.18) {
+    public init(grid: GrassGrid, theme: GrassTheme = .claudeOrange, gapRatio: CGFloat = 0.26) {
         self.grid = grid
         self.theme = theme
         self.gapRatio = gapRatio
@@ -28,7 +28,7 @@ public struct PackedGrassView: View {
                     VStack(spacing: gap) {
                         ForEach(columns[c].indices, id: \.self) { r in
                             let item = columns[c][r]
-                            RoundedRectangle(cornerRadius: max(1, cell * 0.22), style: .continuous)
+                            RoundedRectangle(cornerRadius: max(1, cell * 0.12), style: .continuous)
                                 .fill(item.isFuture ? Color.clear : theme.color(for: thresholds.level(for: item.tokens), onDark: true))
                                 .frame(width: cell, height: cell)
                         }

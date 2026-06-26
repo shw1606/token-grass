@@ -18,14 +18,16 @@ public enum GrassTheme: String, CaseIterable, Sendable {
     /// high → bright, like GitHub's dark theme) plus a visible gray for empty days.
     public func color(for level: GrassLevel, onDark: Bool = false) -> Color {
         guard level != .empty else {
-            return onDark ? Color(.sRGB, white: 0.22, opacity: 1) : Color.primary.opacity(0.08)
+            // Measured from the GitHub reference widget: #2e2f36.
+            return onDark ? Color(.sRGB, red: 0.180, green: 0.184, blue: 0.212, opacity: 1) : Color.primary.opacity(0.08)
         }
         let ramp = onDark ? darkRamp : lightRamp
         return ramp[level.rawValue - 1]
     }
 
-    /// Near-black background to pair with `onDark` cells (matches the reference widget).
-    public static let darkSurface = Color(.sRGB, red: 0.11, green: 0.11, blue: 0.12, opacity: 1)
+    /// Near-black background to pair with `onDark` cells. Measured from the
+    /// GitHub reference widget: #1a1919.
+    public static let darkSurface = Color(.sRGB, red: 0.102, green: 0.098, blue: 0.098, opacity: 1)
 
     // Light surface: pale → deep (GitHub light theme direction).
     private var lightRamp: [Color] {
@@ -51,18 +53,20 @@ public enum GrassTheme: String, CaseIterable, Sendable {
     private var darkRamp: [Color] {
         switch self {
         case .githubGreen:
+            // Exact colors measured from the GitHub reference widget.
             return [
-                Color(red: 0.05, green: 0.27, blue: 0.16),
-                Color(red: 0.00, green: 0.43, blue: 0.20),
-                Color(red: 0.15, green: 0.65, blue: 0.25),
-                Color(red: 0.22, green: 0.83, blue: 0.33),
+                Color(red: 0.153, green: 0.298, blue: 0.161), // #274c29
+                Color(red: 0.227, green: 0.451, blue: 0.231), // #3a733b
+                Color(red: 0.357, green: 0.686, blue: 0.357), // #5baf5b
+                Color(red: 0.439, green: 0.827, blue: 0.439), // #70d370
             ]
         case .claudeOrange:
+            // Claude orange at the GitHub reference's exact luminance steps.
             return [
-                Color(red: 0.30, green: 0.16, blue: 0.07),
-                Color(red: 0.55, green: 0.29, blue: 0.12),
-                Color(red: 0.82, green: 0.46, blue: 0.20),
-                Color(red: 0.97, green: 0.64, blue: 0.31),
+                Color(red: 0.413, green: 0.190, blue: 0.041), // #69300a
+                Color(red: 0.621, green: 0.285, blue: 0.061), // #9e4910
+                Color(red: 0.914, green: 0.444, blue: 0.131), // #e97121
+                Color(red: 0.936, green: 0.589, blue: 0.357), // #ef965b
             ]
         }
     }

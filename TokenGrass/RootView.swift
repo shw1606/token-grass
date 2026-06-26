@@ -81,7 +81,7 @@ struct RootView: View {
 
     private func mockCard(@ViewBuilder content: () -> some View) -> some View {
         content()
-            .padding(12)
+            .padding(16) // ≈ 1 cell, matching the widget's system content margin
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(GrassTheme.darkSurface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
