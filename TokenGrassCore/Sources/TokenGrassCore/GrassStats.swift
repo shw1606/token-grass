@@ -30,7 +30,15 @@ public struct MonthLabel: Equatable, Sendable {
 
 public extension DateGrid {
     /// One label per column where a new month begins (GitHub-style top axis).
-    static func monthLabels(for grid: GrassGrid, calendar: Calendar = .grass()) -> [MonthLabel] {
+    ///
+    /// A leading label is dropped when the window starts mid-month and the next
+    /// month begins within `minColumnGap` columns — otherwise the partial first
+    /// month's label collides with the next one (e.g. "NovDec").
+    static func monthLabels(
+        for grid: GrassGrid,
+        calendar: Calendar = .grass(),
+        minColumnGap: Int = 3
+    ) -> [MonthLabel] {
         let parser = dayKeyFormatter(calendar: calendar)
         let monthFormatter = DateFormatter()
         monthFormatter.calendar = calendar
@@ -50,6 +58,10 @@ public extension DateGrid {
                 labels.append(MonthLabel(columnIndex: index, title: monthFormatter.string(from: date)))
                 lastMonth = month
             }
+        }
+
+        if labels.count >= 2, labels[1].columnIndex - labels[0].columnIndex < minColumnGap {
+            labels.removeFirst()
         }
         return labels
     }

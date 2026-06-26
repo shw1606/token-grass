@@ -2,6 +2,14 @@
 
 > Your Claude Code token usage as a GitHub-style contribution graph — right on your iPhone home screen. Phone-only, free, open source.
 
+<p align="center">
+  <img src="docs/screenshots/app-light.png" width="270" alt="TokenGrass — light mode">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/app-dark.png" width="270" alt="TokenGrass — dark mode">
+</p>
+
+<p align="center"><sub>Demo data shown — running on the iOS 26 simulator.</sub></p>
+
 TokenGrass turns your daily Claude Code token usage into a familiar contribution
 heatmap and puts it **directly on your home screen as a widget** — no need to open
 the app, no companion Mac required, no paywall.
