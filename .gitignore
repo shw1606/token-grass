@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Xcode / build artifacts
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# XcodeGen output — project.yml is the source of truth; regenerate with `xcodegen`.
+# (Remove this line if you prefer to commit the project for zero-tooling contributors.)
+TokenGrass.xcodeproj/
