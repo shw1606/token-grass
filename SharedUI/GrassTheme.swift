@@ -14,17 +14,21 @@ public enum GrassTheme: String, CaseIterable, Sendable {
         }
     }
 
-    public func color(for level: GrassLevel) -> Color {
-        switch level {
-        case .empty:
-            // Adaptive faint fill that reads correctly in both light and dark mode.
-            return Color.primary.opacity(0.08)
-        case .one, .two, .three, .four:
-            return ramp[level.rawValue - 1]
+    /// Cell color. `onDark` selects a ramp tuned for a dark surface (low → dark,
+    /// high → bright, like GitHub's dark theme) plus a visible gray for empty days.
+    public func color(for level: GrassLevel, onDark: Bool = false) -> Color {
+        guard level != .empty else {
+            return onDark ? Color(.sRGB, white: 0.22, opacity: 1) : Color.primary.opacity(0.08)
         }
+        let ramp = onDark ? darkRamp : lightRamp
+        return ramp[level.rawValue - 1]
     }
 
-    private var ramp: [Color] {
+    /// Near-black background to pair with `onDark` cells (matches the reference widget).
+    public static let darkSurface = Color(.sRGB, red: 0.11, green: 0.11, blue: 0.12, opacity: 1)
+
+    // Light surface: pale → deep (GitHub light theme direction).
+    private var lightRamp: [Color] {
         switch self {
         case .githubGreen:
             return [
@@ -39,6 +43,26 @@ public enum GrassTheme: String, CaseIterable, Sendable {
                 Color(red: 0.93, green: 0.58, blue: 0.33),
                 Color(red: 0.83, green: 0.40, blue: 0.18),
                 Color(red: 0.61, green: 0.27, blue: 0.11),
+            ]
+        }
+    }
+
+    // Dark surface: deep → bright (GitHub dark theme direction).
+    private var darkRamp: [Color] {
+        switch self {
+        case .githubGreen:
+            return [
+                Color(red: 0.05, green: 0.27, blue: 0.16),
+                Color(red: 0.00, green: 0.43, blue: 0.20),
+                Color(red: 0.15, green: 0.65, blue: 0.25),
+                Color(red: 0.22, green: 0.83, blue: 0.33),
+            ]
+        case .claudeOrange:
+            return [
+                Color(red: 0.30, green: 0.16, blue: 0.07),
+                Color(red: 0.55, green: 0.29, blue: 0.12),
+                Color(red: 0.82, green: 0.46, blue: 0.20),
+                Color(red: 0.97, green: 0.64, blue: 0.31),
             ]
         }
     }

@@ -9,6 +9,7 @@ struct RootView: View {
 
     private var usage: [String: Int] { snapshot.usageByDay }
     private var yearGrid: GrassGrid { DateGrid.makeGrid(usage: usage, weeks: 53) }
+    private var previewGrid: GrassGrid { DateGrid.makeGrid(usage: usage, weeks: 26) }
 
     var body: some View {
         NavigationStack {
@@ -36,7 +37,7 @@ struct RootView: View {
                 demoBadge
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                GrassChartView(grid: yearGrid, theme: .githubGreen, cellSize: 11, spacing: 2.5, showMonthLabels: true)
+                GrassChartView(grid: yearGrid, theme: .claudeOrange, cellSize: 11, spacing: 2.5, showMonthLabels: true)
                     .padding(.vertical, 2)
             }
             .defaultScrollAnchor(.trailing)
@@ -57,34 +58,32 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Widget previews
+    // MARK: - Widget previews (mirror the real widget: dark, orange, packed, no text)
 
     private var widgetPreviews: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("On your home screen").font(.headline)
-            HStack(alignment: .top, spacing: 16) {
-                widgetMock(label: "Small") {
-                    FittedGrassView(grid: DateGrid.makeGrid(usage: usage, weeks: 17), showMonthLabels: false)
-                }
-                .frame(width: 150, height: 150)
 
-                widgetMock(label: "Medium") {
-                    FittedGrassView(grid: DateGrid.makeGrid(usage: usage, weeks: 30), showMonthLabels: true)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 150)
+            VStack(alignment: .leading, spacing: 6) {
+                mockCard { PackedGrassView(grid: previewGrid, theme: .claudeOrange) }
+                    .frame(width: 155, height: 155)
+                Text("2×2").font(.caption2).foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                mockCard { PackedGrassView(grid: previewGrid, theme: .claudeOrange) }
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(2.05, contentMode: .fit)
+                Text("4×2").font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
 
-    private func widgetMock(label: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            content()
-                .padding(12)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }
+    private func mockCard(@ViewBuilder content: () -> some View) -> some View {
+        content()
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(GrassTheme.darkSurface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     // MARK: - Status & footer
