@@ -44,16 +44,17 @@ public enum DemoData {
         while day <= todayStart {
             let wd = calendar.component(.weekday, from: day)
             let isWeekend = (wd == 1 || wd == 7)
-            let roll = rng.nextDouble()
 
             let tokens: Int
-            if roll < 0.15 {
-                tokens = 0 // a chunk of empty days keeps the grass realistic
+            if rng.nextDouble() < 0.013 {
+                tokens = 0 // only a day or two in the window stays empty
             } else {
-                let base = isWeekend ? 8_000.0 : 35_000.0
-                let spread = isWeekend ? 12_000.0 : 40_000.0
-                let spike = rng.nextDouble() < 0.07 ? 2.2 : 1.0
-                tokens = Int((base + rng.nextDouble() * spread) * spike)
+                // Wide, varied spread — percentile color levels stay well balanced.
+                let base = rng.nextDouble()
+                var value = 3_000.0 + pow(base, 1.4) * 120_000.0
+                if rng.nextDouble() < 0.06 { value *= 1.5 } // occasional spike
+                value *= isWeekend ? 0.75 : 1.0
+                tokens = max(800, Int(value))
             }
             result[formatter.string(from: day)] = tokens
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { break }

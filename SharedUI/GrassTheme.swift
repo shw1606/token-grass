@@ -25,9 +25,10 @@ public enum GrassTheme: String, CaseIterable, Sendable {
         return ramp[level.rawValue - 1]
     }
 
-    /// Near-black background to pair with `onDark` cells. Measured from the
-    /// GitHub reference widget: #1a1919.
-    public static let darkSurface = Color(.sRGB, red: 0.102, green: 0.098, blue: 0.098, opacity: 1)
+    /// Near-black background to pair with `onDark` cells. The GitHub reference
+    /// widget's true flat background (cell-edge AA eroded away) measures ~#040404
+    /// with a modal #000000, so we use a near-pure black: #050505.
+    public static let darkSurface = Color(.sRGB, red: 0.02, green: 0.02, blue: 0.02, opacity: 1)
 
     // Light surface: pale → deep (GitHub light theme direction).
     private var lightRamp: [Color] {
