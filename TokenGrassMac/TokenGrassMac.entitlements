@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Non-sandboxed (direct download): no app-sandbox key, so the app can read
+	  Claude Code's Keychain item and make network requests with the user's consent.
+	-->
+</dict>
+</plist>

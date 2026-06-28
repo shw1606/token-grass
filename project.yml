@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: dev.yulebuilds
   deploymentTarget:
     iOS: "17.0"
+    macOS: "14.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
 
@@ -51,6 +52,24 @@ targets:
         PRODUCT_NAME: TokenGrassWidget
         INFOPLIST_FILE: TokenGrassWidget/Info.plist
         CODE_SIGN_ENTITLEMENTS: TokenGrassWidget/TokenGrassWidget.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: TokenGrassCore
+
+  # macOS menu-bar companion (direct download, non-sandboxed): reads the Claude
+  # Code keychain token, polls usage, accumulates, renders grass.
+  TokenGrassMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: TokenGrassMac
+      - path: SharedUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.yulebuilds.tokengrass.mac
+        PRODUCT_NAME: TokenGrass
+        INFOPLIST_FILE: TokenGrassMac/Info.plist
+        CODE_SIGN_ENTITLEMENTS: TokenGrassMac/TokenGrassMac.entitlements
         GENERATE_INFOPLIST_FILE: NO
     dependencies:
       - package: TokenGrassCore
