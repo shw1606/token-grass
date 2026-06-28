@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import TokenGrassCore
 
 /// Validates the chosen auth: the app runs the GENUINE `claude setup-token`
@@ -39,28 +40,42 @@ func runConnect() {
     }
 }
 
-/// Runs `claude setup-token` under a PTY (via `script`) so it behaves
-/// interactively — opens the browser and line-buffers — while `script` also
-/// logs everything to a file we read the token from. Terminal stdio is inherited
-/// so the user can respond to any prompt; in the GUI the app drives the PTY itself.
+/// Runs `claude setup-token` attached to a real PTY so it sees a terminal —
+/// opens the browser and line-buffers — while we capture its output (incl. the
+/// token). The GUI app uses the same technique (no terminal needed).
 private func runClaudeSetupToken(at path: String) -> (output: String, exitCode: Int32) {
-    let logURL = tokengrassDir().appendingPathComponent("setup-token.log")
-    try? FileManager.default.removeItem(at: logURL)
+    var primary: Int32 = 0
+    var secondary: Int32 = 0
+    guard openpty(&primary, &secondary, nil, nil, nil) == 0 else {
+        return ("openpty 실패", -1)
+    }
 
+    let secondaryHandle = FileHandle(fileDescriptor: secondary, closeOnDealloc: false)
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
-    // script -q <logfile> <command…>  → run in a pseudo-terminal, logging output.
-    process.arguments = ["-q", logURL.path, path, "setup-token"]
-    process.standardInput = FileHandle.standardInput
-    process.standardOutput = FileHandle.standardOutput
-    process.standardError = FileHandle.standardError
+    process.executableURL = URL(fileURLWithPath: path)
+    process.arguments = ["setup-token"]
+    process.standardInput = secondaryHandle
+    process.standardOutput = secondaryHandle
+    process.standardError = secondaryHandle
 
-    do { try process.run() } catch { return ("", -1) }
+    do { try process.run() } catch {
+        close(primary); close(secondary)
+        return ("실행 실패: \(error)", -1)
+    }
+    close(secondary) // parent drops its copy so EOF arrives when the child exits
+
+    // Blocking read loop: echo to the user's terminal + capture for token extraction.
+    let primaryHandle = FileHandle(fileDescriptor: primary, closeOnDealloc: false)
+    var captured = Data()
+    while true {
+        let chunk = primaryHandle.availableData
+        if chunk.isEmpty { break } // EOF
+        captured.append(chunk)
+        FileHandle.standardOutput.write(chunk)
+    }
     process.waitUntilExit()
-
-    let log = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
-    try? FileManager.default.removeItem(at: logURL) // contains the token
-    return (log, process.terminationStatus)
+    close(primary)
+    return (String(data: captured, encoding: .utf8) ?? "", process.terminationStatus)
 }
 
 private func extractToken(from output: String) -> String? {
