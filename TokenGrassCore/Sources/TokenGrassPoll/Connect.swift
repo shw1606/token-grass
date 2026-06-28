@@ -74,15 +74,18 @@ private func runClaudeSetupToken(at path: String) -> (output: String, exitCode: 
         if chunk.isEmpty { break } // EOF (claude exited on its own)
         captured.append(chunk)
         FileHandle.standardOutput.write(chunk)
-        // setup-token's TUI doesn't auto-exit — once the token block is printed, stop it.
+        // setup-token's TUI never exits; the surrounding text is interleaved with
+        // escape codes. Detect the full token line itself, then hard-kill claude.
         let text = String(decoding: captured, as: UTF8.self)
-        if text.contains("Store this token") || text.contains("CLAUDE_CODE_OAUTH_TOKEN") {
-            process.interrupt() // SIGINT, like the user's Ctrl+C
+        if text.range(of: "sk-ant-oat01-[A-Za-z0-9_-]{30,}\\s", options: .regularExpression) != nil {
+            kill(process.processIdentifier, SIGKILL)
             break
         }
     }
     process.waitUntilExit()
     close(primary)
+    // Reset the user's terminal after claude's raw-mode / focus-tracking escapes.
+    FileHandle.standardOutput.write(Data("\u{001B}[?1004l\u{001B}[?25h\u{001B}[0m\r\n".utf8))
     return (String(decoding: captured, as: UTF8.self), process.terminationStatus)
 }
 
