@@ -14,9 +14,9 @@ func runConnect() {
 
     let (output, exitCode) = runClaudeSetupToken(at: claudePath)
     print("\n----")
-    guard exitCode == 0 else { fail("claude setup-token 종료코드 \(exitCode)") }
+    // We interrupt claude after it prints the token, so a non-zero exit is expected.
     guard let token = extractToken(from: output) else {
-        fail("출력에서 토큰(sk-ant-…)을 못 찾았습니다. 마지막 출력:\n\(String(output.suffix(400)))")
+        fail("출력에서 토큰(sk-ant-…)을 못 찾았습니다 (exit \(exitCode)). 마지막 출력:\n\(String(output.suffix(400)))")
     }
 
     let tokens = OAuthTokens(
@@ -46,7 +46,9 @@ func runConnect() {
 private func runClaudeSetupToken(at path: String) -> (output: String, exitCode: Int32) {
     var primary: Int32 = 0
     var secondary: Int32 = 0
-    guard openpty(&primary, &secondary, nil, nil, nil) == 0 else {
+    // Wide terminal so the long token isn't soft-wrapped across lines.
+    var size = winsize(ws_row: 120, ws_col: 400, ws_xpixel: 0, ws_ypixel: 0)
+    guard openpty(&primary, &secondary, nil, nil, &size) == 0 else {
         return ("openpty 실패", -1)
     }
 
@@ -69,13 +71,19 @@ private func runClaudeSetupToken(at path: String) -> (output: String, exitCode: 
     var captured = Data()
     while true {
         let chunk = primaryHandle.availableData
-        if chunk.isEmpty { break } // EOF
+        if chunk.isEmpty { break } // EOF (claude exited on its own)
         captured.append(chunk)
         FileHandle.standardOutput.write(chunk)
+        // setup-token's TUI doesn't auto-exit — once the token block is printed, stop it.
+        let text = String(decoding: captured, as: UTF8.self)
+        if text.contains("Store this token") || text.contains("CLAUDE_CODE_OAUTH_TOKEN") {
+            process.interrupt() // SIGINT, like the user's Ctrl+C
+            break
+        }
     }
     process.waitUntilExit()
     close(primary)
-    return (String(data: captured, encoding: .utf8) ?? "", process.terminationStatus)
+    return (String(decoding: captured, as: UTF8.self), process.terminationStatus)
 }
 
 private func extractToken(from output: String) -> String? {
