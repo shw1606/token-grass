@@ -51,6 +51,7 @@ final class UsageService: ObservableObject {
                 now: Date()
             )
             MacStateStore.save(accumulator.state)
+            ICloudGrassStore.write(GrassPayload(daily: accumulator.state.daily, updatedAt: Date()))
             refreshGrid()
             lastSync = Date()
             connection = .ok

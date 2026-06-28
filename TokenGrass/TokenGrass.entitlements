@@ -6,5 +6,7 @@
 	<array>
 		<string>group.dev.yulebuilds.tokengrass</string>
 	</array>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)dev.yulebuilds.tokengrass</string>
 </dict>
 </plist>

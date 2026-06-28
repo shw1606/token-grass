@@ -2,9 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!--
-	  Non-sandboxed (direct download): no app-sandbox key, so the app can read
-	  Claude Code's Keychain item and make network requests with the user's consent.
-	-->
+	<!-- Non-sandboxed (direct download): no app-sandbox key, so the app can read
+	     Claude Code's Keychain item and make network requests. -->
+	<!-- Shared iCloud key-value store (same identifier as the iOS app). -->
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)dev.yulebuilds.tokengrass</string>
 </dict>
 </plist>

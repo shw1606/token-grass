@@ -5,7 +5,10 @@ import TokenGrassCore
 /// what an App Review reviewer sees with no token (DESIGN §5.1, APPSTORE 2.1).
 /// Token connect / sync / disconnect arrive in a later phase.
 struct RootView: View {
-    private let snapshot = DemoData.snapshot(weeks: 53)
+    @ObservedObject var sync: ICloudSync
+
+    private var isReal: Bool { sync.snapshot != nil }
+    private var snapshot: UsageSnapshot { sync.snapshot ?? DemoData.snapshot(weeks: 53) }
 
     private var usage: [String: Int] { snapshot.usageByDay }
     private var yearGrid: GrassGrid { DateGrid.makeGrid(usage: usage, weeks: 53) }
@@ -102,10 +105,11 @@ struct RootView: View {
     }
 
     private var demoBadge: some View {
-        Text("DEMO")
+        Text(isReal ? "SYNCED" : "DEMO")
             .font(.caption2.bold())
+            .foregroundStyle(isReal ? Color.green : Color.primary)
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Color.yellow.opacity(0.25), in: Capsule())
+            .background((isReal ? Color.green : Color.yellow).opacity(0.22), in: Capsule())
     }
 
     private var disclaimer: some View {
@@ -141,5 +145,5 @@ private extension View {
 }
 
 #Preview {
-    RootView()
+    RootView(sync: ICloudSync())
 }
