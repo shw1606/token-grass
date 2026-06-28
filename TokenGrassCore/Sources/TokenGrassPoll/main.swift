@@ -6,7 +6,7 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-print("TokenGrass poller — Keychain 읽고 /api/oauth/usage 1회 폴링…\n")
+print("\n=== TokenGrass poll @ \(ISO8601DateFormatter().string(from: Date())) ===")
 
 // 1) credentials from Keychain (triggers an Allow prompt the first time)
 let credentials: ClaudeCredentials

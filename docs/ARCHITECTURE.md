@@ -193,7 +193,7 @@ last = {u, now, resetAt}
 
 ## 11. 오픈 검증 / 스파이크 (구현 중 확정)
 - [x] **S1 — `seven_day` 누적형 확인됨:** 2회 폴링 **41% → 43%** (동일 `resets_at` 16:00, 마이크로초만 jitter), `five_hour` 0→6. 누적-단조 확정 → §5 차분 채택. **윈도 동일성은 `resets_at` ±120초 허용 비교**(마이크로초 jitter 때문). 파서+`UsageAccumulator`+테스트 구현·통과(28/28).
-- [ ] **S2 — refresh 동작:** `platform.claude.com/v1/oauth/token`로 access 갱신 PoC(Cloudflare 차단 여부).
+- [x] **S2 — 토큰 만료 = 피기백(확정, refresh 미구현):** 자체 refresh는 **refresh 토큰 회전 시 Claude Code 로그인을 깨뜨릴 위험** + Cloudflare 차단 위험이 있어 **채택 안 함**. 대신 **매 폴마다 Keychain 재독**(Claude Code가 사용 중 access token 갱신) + 401이면 그 폴 스킵 후 재시도. Claude Code가 8h+ idle이면 폴 스킵되지만 `seven_day` 누적이 다음 성공 폴에서 따라잡음(총량 보존, §5 갭분배가 날짜 배치 처리). → Cloudflare·토큰회전 리스크 동시 회피.
 - [ ] **S3 — 해상도:** 정수 % 가 가벼운 날을 0으로 만드는 정도 측정 → `five_hour` 병행 필요성 결정.
 - [ ] **S4 — iCloud:** Mac↔iOS KVS/CloudKit 동기화 + entitlement(유료 계정).
 - [ ] **S5 — 멀티 기기:** 한 계정 여러 Mac에 컴패니언 시 중복 가산 방지(같은 `seven_day`를 두 Mac이 차분하면 이중계상) → "리더 1대" 또는 iCloud 머지 규칙.
