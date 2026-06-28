@@ -76,8 +76,10 @@ private func runClaudeSetupToken(at path: String) -> (output: String, exitCode: 
         FileHandle.standardOutput.write(chunk)
         // setup-token's TUI never exits; the surrounding text is interleaved with
         // escape codes. Detect the full token line itself, then hard-kill claude.
-        let text = String(decoding: captured, as: UTF8.self)
-        if text.range(of: "sk-ant-oat01-[A-Za-z0-9_-]{30,}\\s", options: .regularExpression) != nil {
+        let text = stripANSI(String(decoding: captured, as: UTF8.self))
+        let complete = text.range(of: "sk-ant-oat01-[A-Za-z0-9_-]{30,}\\s", options: .regularExpression) != nil
+            || text.range(of: "sk-ant-oat01-[A-Za-z0-9_-]{90,}", options: .regularExpression) != nil
+        if complete {
             kill(process.processIdentifier, SIGKILL)
             break
         }
@@ -89,13 +91,24 @@ private func runClaudeSetupToken(at path: String) -> (output: String, exitCode: 
     return (String(decoding: captured, as: UTF8.self), process.terminationStatus)
 }
 
-private func extractToken(from output: String) -> String? {
+private func extractToken(from rawOutput: String) -> String? {
+    let output = stripANSI(rawOutput)
     guard let regex = try? NSRegularExpression(pattern: "sk-ant-[A-Za-z0-9_-]{20,}") else { return nil }
     let range = NSRange(output.startIndex..., in: output)
     let tokens = regex.matches(in: output, range: range).compactMap {
         Range($0.range, in: output).map { String(output[$0]) }
     }
     return tokens.max(by: { $0.count < $1.count }) // longest sk-ant match
+}
+
+/// Strip ANSI escape sequences (CSI + OSC) so the token isn't fragmented by the
+/// TUI's color/cursor codes.
+private func stripANSI(_ s: String) -> String {
+    var result = s
+    for pattern in ["\u{001B}\\[[0-9;?]*[A-Za-z]", "\u{001B}\\][^\u{0007}]*\u{0007}", "\u{001B}[=>()][A-Za-z0-9]?"] {
+        result = result.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+    }
+    return result
 }
 
 private func findClaude() -> String? {
