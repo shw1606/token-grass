@@ -1,8 +1,23 @@
 # TokenGrass — 데이터 아키텍처 (v2, 실데이터)
 
-> **상태:** 확정 초안 (구현 직전) · 2026-06-28
+> **상태:** 구현 중 · 2026-06-29
 > **이 문서는 `DESIGN.md`의 §2(인증/토큰), §3(아키텍처), §6(온보딩 헬퍼)를 대체한다.** UI/위젯/색 매핑(§4~5)과 포지셔닝은 유효.
 > **한 줄:** Mac 컴패니언이 Anthropic `/api/oauth/usage`를 주기적으로 폴링 → **한도 사용률(%)** 을 일별로 누적 → iCloud → iPhone 잔디 위젯. **백엔드/서버/DB 없음.**
+
+> ### v3 — 인증·배포 확정 (구현 결과 반영)
+> 인증 방식을 길게 탐색한 결론:
+> - ❌ **인앱 OAuth 흉내** (Claude Code client `9d1c…`): authorize 단계에서 **Anthropic이 차단** ("Invalid request format" — 정품과 글자 그대로 동일한 요청도 거부). 정책의 기술적 집행.
+> - ❌ **`claude setup-token`**: 앱이 PTY로 실행→토큰 캡처까진 되지만, 그 토큰 스코프가 **`user:inference`뿐 → `/api/oauth/usage`가 요구하는 `user:profile` 없음 → 403**.
+> - ✅ **piggyback (확정):** Mac 앱이 **Claude Code 키체인 토큰**(`Claude Code-credentials`)을 읽음. 정식 로그인이라 `user:profile` 포함 → usage 200. refresh는 Claude Code가 유지(우리는 재독만).
+>
+> **배포 확정:**
+> - **Mac 컴패니언 = 직접 다운로드(notarized, 비샌드박스).** 키체인을 읽으려면 비샌드박스 필수 → Mac 앱스토어 불가. (경쟁작은 claude.ai 웹로그인이라 샌드박스 가능했지만, 그건 정책상 더 위험.)
+> - **iOS 앱 = 앱스토어.** 자격증명·네트워크 0, iCloud 표시만.
+> - **전제:** 사용자가 **Claude Code 설치+로그인**돼 있어야 함(키체인 토큰 존재). 대상 = Claude Code 사용자.
+>
+> **비용 게이트:** **iCloud는 유료 Apple Developer Program($99/년) 필요** (무료 Personal 팀은 iCloud capability 불가). 앱스토어 배포도 어차피 이 $99 필수.
+>
+> **구현 현황:** Mac 메뉴바 앱(키체인 폴+누적+잔디+login-item+wake폴) 동작 확인(실데이터). iCloud 동기화 코드 완성·컴파일 통과 — **유료 계정 전환 후 테스트 예정.**
 
 ---
 
