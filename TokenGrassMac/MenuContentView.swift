@@ -50,13 +50,25 @@ struct MenuContentView: View {
     @ViewBuilder private var grassSection: some View {
         switch service.connection {
         case .notConnected:
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Claude Code 로그인이 필요합니다").font(.subheadline.weight(.medium))
-                Text("터미널에서 `claude` 를 실행해 로그인하면 잔디가 자라기 시작합니다.")
+                Text("Mac에서 Claude Code에 로그인돼 있어야 사용량을 읽습니다. 터미널에서 `claude` 를 한 번 실행해 로그인하세요.")
                     .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("터미널 열기") { openTerminal() }
+                    Button("다시 확인") { Task { await service.sync() } }
+                }
+                .controlSize(.small)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        default:
+        case .error(let message):
+            VStack(alignment: .leading, spacing: 6) {
+                Text("동기화 오류").font(.subheadline.weight(.medium)).foregroundStyle(.red)
+                Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                Button("다시 시도") { Task { await service.sync() } }.controlSize(.small)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        case .ok, .unknown:
             if service.hasData {
                 PackedGrassView(grid: service.grid, theme: .claudeOrange)
                     .padding(10)
@@ -68,6 +80,10 @@ struct MenuContentView: View {
                     .frame(maxWidth: .infinity, minHeight: 70)
             }
         }
+    }
+
+    private func openTerminal() {
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
     }
 
     private var stats: some View {
