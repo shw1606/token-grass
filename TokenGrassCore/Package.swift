@@ -12,9 +12,12 @@ let package = Package(
     ],
     products: [
         .library(name: "TokenGrassCore", targets: ["TokenGrassCore"]),
+        // Dev/companion CLI: read Keychain creds → poll /api/oauth/usage → accumulate.
+        .executable(name: "tokengrass-poll", targets: ["TokenGrassPoll"]),
     ],
     targets: [
         .target(name: "TokenGrassCore"),
+        .executableTarget(name: "TokenGrassPoll", dependencies: ["TokenGrassCore"]),
         .testTarget(name: "TokenGrassCoreTests", dependencies: ["TokenGrassCore"]),
     ]
 )

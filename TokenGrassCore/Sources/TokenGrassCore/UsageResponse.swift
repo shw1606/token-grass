@@ -56,12 +56,12 @@ public struct UsageResponse: Decodable, Sendable {
     }
 }
 
-enum ISO8601 {
+public enum ISO8601 {
     /// Parses ISO-8601 with or without fractional seconds. The endpoint sends
     /// microseconds ("2026-07-01T16:00:00.253187+00:00") which the system
     /// formatter (millisecond precision) can reject — so we strip the fraction
     /// and retry. Second-level precision is all we need (windows compared ±120s).
-    static func flexible(_ string: String) -> Date? {
+    public static func flexible(_ string: String) -> Date? {
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = withFraction.date(from: string) { return date }

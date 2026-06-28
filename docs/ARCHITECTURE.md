@@ -151,8 +151,11 @@ last = {u, now, resetAt}
 ## 7. 동기화: iCloud (백엔드/DB 없음)
 
 - 동기화 대상 = `daily` 요약(1년 ≈ 365개 Double) + `last` → **수 KB**.
-- **옵션 A (권장 시작):** `NSUbiquitousKeyValueStore`(iCloud KVS, 1MB 한도) — 단일 JSON blob. 가장 단순. Mac↔iOS가 동일 iCloud 컨테이너 공유.
-- **옵션 B:** CloudKit private DB 레코드 1개 — 더 견고, 충돌처리. 데이터 커지면 전환.
+- **옵션 A (권장 시작):** `NSUbiquitousKeyValueStore`(iCloud KVS, 앱당 1MB) — 단일 JSON blob. 가장 단순. Mac↔iOS가 동일 iCloud 컨테이너 공유.
+  - **장점: 사용자 iCloud 저장공간 quota와 무관한 별도 1MB 할당** → **iCloud가 꽉 차도 동기화 계속됨.** (사진/백업이 차는 그 quota를 안 씀)
+- **옵션 B:** CloudKit private DB 레코드 1개 — 더 견고, 충돌처리. 단 **사용자 quota를 공유**하므로 극단적으로 꽉 차면 쓰기 실패 가능(데이터 몇 KB라 거의 무관). 데이터 커지면 전환.
+- **Graceful degradation(공통):** 동기화 실패해도 위젯은 App Group의 마지막 동기화본을 계속 렌더(안 깨짐, 안 자랄 뿐). Mac은 로컬 원본 보유 → 재개 시 따라잡음.
+- **주의(용량 아님):** iCloud 로그아웃/앱 iCloud 토글 off면 동기화 X → 앱에서 안내 + 로컬 폴백.
 - iOS 앱은 iCloud에서 읽어 **App Group**(`group.dev.yulebuilds.tokengrass`)에 미러 → 위젯이 App Group만 읽음(현행 그대로).
 - **서버·DB·계정·비용 = 0.** 각 사용자 자기 iCloud 안에서만.
 
