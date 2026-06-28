@@ -39,33 +39,28 @@ func runConnect() {
     }
 }
 
-/// Runs `claude setup-token`, capturing combined stdout+stderr while echoing it
-/// live so the user sees the prompts / browser instructions.
+/// Runs `claude setup-token` under a PTY (via `script`) so it behaves
+/// interactively — opens the browser and line-buffers — while `script` also
+/// logs everything to a file we read the token from. Terminal stdio is inherited
+/// so the user can respond to any prompt; in the GUI the app drives the PTY itself.
 private func runClaudeSetupToken(at path: String) -> (output: String, exitCode: Int32) {
+    let logURL = tokengrassDir().appendingPathComponent("setup-token.log")
+    try? FileManager.default.removeItem(at: logURL)
+
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: path)
-    process.arguments = ["setup-token"]
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
+    // script -q <logfile> <command…>  → run in a pseudo-terminal, logging output.
+    process.arguments = ["-q", logURL.path, path, "setup-token"]
     process.standardInput = FileHandle.standardInput
-
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = pipe
-
-    let lock = NSLock()
-    var captured = Data()
-    pipe.fileHandleForReading.readabilityHandler = { handle in
-        let chunk = handle.availableData
-        guard !chunk.isEmpty else { return }
-        lock.lock(); captured.append(chunk); lock.unlock()
-        FileHandle.standardError.write(chunk) // echo to user
-    }
+    process.standardOutput = FileHandle.standardOutput
+    process.standardError = FileHandle.standardError
 
     do { try process.run() } catch { return ("", -1) }
     process.waitUntilExit()
-    pipe.fileHandleForReading.readabilityHandler = nil
-    let rest = pipe.fileHandleForReading.readDataToEndOfFile()
-    lock.lock(); captured.append(rest); lock.unlock()
-    return (String(data: captured, encoding: .utf8) ?? "", process.terminationStatus)
+
+    let log = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
+    try? FileManager.default.removeItem(at: logURL) // contains the token
+    return (log, process.terminationStatus)
 }
 
 private func extractToken(from output: String) -> String? {
