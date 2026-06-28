@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 import TokenGrassCore
 
 /// Reads the Claude Code keychain token, polls usage, accumulates daily
@@ -23,9 +24,15 @@ final class UsageService: ObservableObject {
         accumulator = UsageAccumulator(state: MacStateStore.load(), calendar: .grass())
         refreshGrid()
         Task { await sync() }
-        // Poll every 3h while running; wake-from-sleep / launch also triggers a sync.
+        // Poll every 3h while awake…
         timer = Timer.scheduledTimer(withTimeInterval: 3 * 3600, repeats: true) { [weak self] _ in
             Task { await self?.sync() }
+        }
+        // …and catch up immediately on wake from sleep (the timer doesn't fire while asleep).
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.sync() }
         }
     }
 

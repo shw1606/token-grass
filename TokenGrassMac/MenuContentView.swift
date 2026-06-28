@@ -3,17 +3,26 @@ import TokenGrassCore
 
 struct MenuContentView: View {
     @ObservedObject var service: UsageService
+    @State private var launchAtLogin = LoginItem.isEnabled
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             grassSection
             stats
+            loginToggle
             Divider()
             footer
         }
         .padding(14)
         .frame(width: 320)
+    }
+
+    private var loginToggle: some View {
+        Toggle("로그인 시 자동 실행", isOn: $launchAtLogin)
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .onChange(of: launchAtLogin) { _, enabled in LoginItem.setEnabled(enabled) }
     }
 
     private var header: some View {
