@@ -34,11 +34,29 @@ public struct LevelThresholds: Equatable, Sendable {
 
     public static func compute(from tokens: [Int]) -> LevelThresholds {
         let nonZero = tokens.filter { $0 > 0 }
+        let trimmed = removingHighOutliers(nonZero)
         return LevelThresholds(
-            p25: percentile(nonZero, 25),
-            p50: percentile(nonZero, 50),
-            p75: percentile(nonZero, 75)
+            p25: percentile(trimmed, 25),
+            p50: percentile(trimmed, 50),
+            p75: percentile(trimmed, 75)
         )
+    }
+
+    /// Drop extreme high spikes (Tukey's upper fence, Q3 + 1.5·IQR) before
+    /// quartiling, mirroring GitHub: a single record day shouldn't inflate the
+    /// thresholds and wash the color out of every other day. The spike itself is
+    /// still classified `.four` by `level(for:)` (it's above p75) — it just no
+    /// longer drags the scale. Skipped when the sample is too small to judge
+    /// outliers, and never trims the set to empty.
+    static func removingHighOutliers(_ values: [Int]) -> [Int] {
+        guard values.count >= 8 else { return values }
+        let q1 = Double(percentile(values, 25))
+        let q3 = Double(percentile(values, 75))
+        let iqr = q3 - q1
+        guard iqr > 0 else { return values }
+        let fence = q3 + 1.5 * iqr
+        let kept = values.filter { Double($0) <= fence }
+        return kept.isEmpty ? values : kept
     }
 
     public func level(for tokens: Int) -> GrassLevel {

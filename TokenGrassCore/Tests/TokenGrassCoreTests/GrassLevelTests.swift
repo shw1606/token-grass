@@ -21,6 +21,35 @@ final class GrassLevelTests: XCTestCase {
         XCTAssertEqual(withZeros, withoutZeros)
     }
 
+    func testSmallSamplesAreNotTrimmed() {
+        // Below the 8-day sample floor, outlier removal is skipped entirely.
+        let values = [1, 1, 1, 2, 2, 3, 500]
+        XCTAssertEqual(LevelThresholds.removingHighOutliers(values), values)
+    }
+
+    func testHighOutlierIsDroppedFromThresholds() {
+        // Nine steady days plus one record spike. The spike (Q3 + 1.5·IQR fence)
+        // must be excluded so it doesn't inflate p75.
+        let steady = [10, 12, 11, 13, 10, 12, 11, 13, 12]
+        let withSpike = steady + [10_000]
+
+        let trimmed = LevelThresholds.removingHighOutliers(withSpike)
+        XCTAssertFalse(trimmed.contains(10_000))
+        XCTAssertEqual(trimmed.sorted(), steady.sorted())
+
+        // Thresholds match the steady-only set — the spike doesn't move the scale…
+        XCTAssertEqual(LevelThresholds.compute(from: withSpike),
+                       LevelThresholds.compute(from: steady))
+        // …yet the spike day is still the darkest level.
+        XCTAssertEqual(LevelThresholds.compute(from: withSpike).level(for: 10_000), .four)
+    }
+
+    func testNoOutlierLeavesDataIntact() {
+        // A tight spread has no Tukey outliers, so nothing is dropped.
+        let values = [10, 12, 11, 13, 10, 12, 11, 13, 12, 14]
+        XCTAssertEqual(LevelThresholds.removingHighOutliers(values).sorted(), values.sorted())
+    }
+
     func testLevelBoundaries() {
         // nonZero = [10,20,30,40] -> p25=18, p50=25, p75=33
         let t = LevelThresholds.compute(from: [10, 20, 30, 40])
