@@ -24,8 +24,8 @@ final class UsageService: ObservableObject {
         accumulator = UsageAccumulator(state: MacStateStore.load(), calendar: .grass())
         refreshGrid()
         Task { await sync() }
-        // Poll every 3h while awake…
-        timer = Timer.scheduledTimer(withTimeInterval: 3 * 3600, repeats: true) { [weak self] _ in
+        // Poll every 5 min while awake (the menu bar shows the % continuously)…
+        timer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
             Task { await self?.sync() }
         }
         // …and catch up immediately on wake from sleep (the timer doesn't fire while asleep).
@@ -52,14 +52,19 @@ final class UsageService: ObservableObject {
             let usage = try UsageResponse.parse(data)
             fiveHour = usage.fiveHour.utilization
             sevenDay = usage.sevenDay.utilization
+            let before = accumulator.state.daily
             accumulator.apply(
                 utilization: usage.sevenDay.utilization,
                 resetAt: usage.sevenDay.resetsAt,
                 now: Date()
             )
             MacStateStore.save(accumulator.state)
-            ICloudGrassStore.write(GrassPayload(daily: accumulator.state.daily, updatedAt: Date()))
-            refreshGrid()
+            // Only push to iCloud when the grass actually changed — the KVS
+            // throttles frequent writes, and 5-min polling usually is a no-op.
+            if accumulator.state.daily != before {
+                ICloudGrassStore.write(GrassPayload(daily: accumulator.state.daily, updatedAt: Date()))
+                refreshGrid()
+            }
             lastSync = Date()
             connection = .ok
         } catch {
