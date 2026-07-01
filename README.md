@@ -13,6 +13,14 @@
 TokenGrass turns your daily Claude usage into a familiar contribution heatmap and
 puts it **directly on your home screen as a widget** — glance, don't tap. No paywall.
 
+<p align="center">
+  <img src="docs/screenshots/widget-small.png" width="150" alt="Small (2×2) grass widget">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/widget-medium.png" width="322" alt="Medium (4×2) grass widget">
+</p>
+
+<p align="center"><sub>The home-screen widget in both sizes — pixel-matched to GitHub's contribution graph, in Claude orange. Demo data.</sub></p>
+
 **Status:** working prototype. A macOS menu-bar companion reads your usage and
 renders the grass live; iCloud sync to the iPhone widget is code-complete and turns
 on with a paid Apple Developer account. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
