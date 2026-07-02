@@ -14,6 +14,8 @@ final class UsageService: ObservableObject {
     @Published private(set) var connection: Connection = .unknown
     @Published private(set) var fiveHour: Double = 0
     @Published private(set) var sevenDay: Double = 0
+    @Published private(set) var fiveHourResetsAt: Date?
+    @Published private(set) var sevenDayResetsAt: Date?
     @Published private(set) var lastSync: Date?
     @Published private(set) var grid: GrassGrid = DateGrid.makeGrid(usage: [:], weeks: 26)
 
@@ -52,6 +54,8 @@ final class UsageService: ObservableObject {
             let usage = try UsageResponse.parse(data)
             fiveHour = usage.fiveHour.utilization
             sevenDay = usage.sevenDay.utilization
+            fiveHourResetsAt = usage.fiveHour.resetsAt
+            sevenDayResetsAt = usage.sevenDay.resetsAt
             let before = accumulator.state.daily
             accumulator.apply(
                 utilization: usage.sevenDay.utilization,
