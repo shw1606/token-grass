@@ -45,38 +45,63 @@ final class UsageService: ObservableObject {
 
     var hasData: Bool { !accumulator.state.daily.isEmpty }
 
-    func sync() async {
-        let token: String
-        do {
-            token = try ClaudeKeychain.accessToken()
-        } catch {
-            connection = .notConnected
-            return
-        }
+    /// Cached so we don't hit the Keychain on every poll — reading Claude Code's
+    /// item can pop a macOS permission prompt, and doing it every 5 minutes is
+    /// what made the prompt recur. We read once, then only re-read when the token
+    /// goes stale (a 401).
+    private var cachedToken: String?
 
+    func sync() async {
         do {
-            let usage = try await fetchUsage(token: token, attempts: 3)
-            fiveHour = usage.fiveHour.utilization
-            sevenDay = usage.sevenDay.utilization
-            fiveHourResetsAt = usage.fiveHour.resetsAt
-            sevenDayResetsAt = usage.sevenDay.resetsAt
-            let before = accumulator.state.daily
-            accumulator.apply(
-                utilization: usage.sevenDay.utilization,
-                resetAt: usage.sevenDay.resetsAt,
-                now: Date()
-            )
-            MacStateStore.save(accumulator.state)
-            // Only push to iCloud when the grass actually changed — the KVS
-            // throttles frequent writes, and 5-min polling usually is a no-op.
-            if accumulator.state.daily != before {
-                ICloudGrassStore.write(GrassPayload(daily: accumulator.state.daily, updatedAt: Date()))
-                refreshGrid()
-            }
+            let usage = try await fetchUsageRefreshingTokenIfNeeded()
+            applyUsage(usage)
             lastSync = Date()
             connection = .ok
+        } catch is KeychainError {
+            connection = .notConnected
         } catch {
             connection = .error(Self.friendlyMessage(for: error))
+        }
+    }
+
+    private func currentToken() throws -> String {
+        if let cachedToken { return cachedToken }
+        let token = try ClaudeKeychain.accessToken()
+        cachedToken = token
+        return token
+    }
+
+    private func fetchUsageRefreshingTokenIfNeeded() async throws -> UsageResponse {
+        do {
+            return try await fetchUsage(token: try currentToken(), attempts: 3)
+        } catch let error as UsageClientError {
+            // Token expired (Claude Code rotated it): drop the cache and re-read
+            // once. Any other HTTP error propagates.
+            if case .http(let code, _) = error, code == 401 || code == 403 {
+                cachedToken = nil
+                return try await fetchUsage(token: try currentToken(), attempts: 2)
+            }
+            throw error
+        }
+    }
+
+    private func applyUsage(_ usage: UsageResponse) {
+        fiveHour = usage.fiveHour.utilization
+        sevenDay = usage.sevenDay.utilization
+        fiveHourResetsAt = usage.fiveHour.resetsAt
+        sevenDayResetsAt = usage.sevenDay.resetsAt
+        let before = accumulator.state.daily
+        accumulator.apply(
+            utilization: usage.sevenDay.utilization,
+            resetAt: usage.sevenDay.resetsAt,
+            now: Date()
+        )
+        MacStateStore.save(accumulator.state)
+        // Only push to iCloud when the grass actually changed — the KVS
+        // throttles frequent writes, and 5-min polling usually is a no-op.
+        if accumulator.state.daily != before {
+            ICloudGrassStore.write(GrassPayload(daily: accumulator.state.daily, updatedAt: Date()))
+            refreshGrid()
         }
     }
 
