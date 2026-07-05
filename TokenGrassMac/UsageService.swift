@@ -50,6 +50,9 @@ final class UsageService: ObservableObject {
     /// what made the prompt recur. We read once, then only re-read when the token
     /// goes stale (a 401).
     private var cachedToken: String?
+    /// Push to iCloud once per launch even if nothing changed, so a freshly
+    /// installed iPhone/widget gets the current grass immediately.
+    private var hasPushedICloud = false
 
     func sync() async {
         do {
@@ -97,10 +100,12 @@ final class UsageService: ObservableObject {
             now: Date()
         )
         MacStateStore.save(accumulator.state)
-        // Only push to iCloud when the grass actually changed — the KVS
-        // throttles frequent writes, and 5-min polling usually is a no-op.
-        if accumulator.state.daily != before {
+        // Push to iCloud on the first sync of a session (so new devices get the
+        // current grass), then only when it actually changes — the KVS throttles
+        // frequent writes, and 5-min polling is usually a no-op.
+        if accumulator.state.daily != before || !hasPushedICloud {
             ICloudGrassStore.write(GrassPayload(daily: accumulator.state.daily, updatedAt: Date()))
+            hasPushedICloud = true
             refreshGrid()
         }
     }

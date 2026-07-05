@@ -13,8 +13,7 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
-    # Set your team in Xcode (Signing & Capabilities) or via DEVELOPMENT_TEAM here.
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: HTV7346Y9P
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
 
 packages:
