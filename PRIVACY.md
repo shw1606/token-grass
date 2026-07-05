@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-07-05_
+_Last updated: 2026-07-05_ · [한국어](PRIVACY.ko.md)
 
 **TokenGrass collects nothing.** There is no backend, no account, and no
 analytics. Nothing you do in the app or the Mac app is sent to us or to any third
