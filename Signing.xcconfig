@@ -1,0 +1,12 @@
+// Signing configuration for all targets.
+//
+// The Apple Developer team is intentionally kept out of the repo. Set it locally:
+//   cp Signing.local.xcconfig.example Local.xcconfig
+//   # then edit Local.xcconfig and set DEVELOPMENT_TEAM
+// …or just choose your team in Xcode → Signing & Capabilities (writes the
+// gitignored .xcodeproj). Local.xcconfig, if present, wins over the empty
+// default below via the optional include.
+
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

@@ -1,0 +1,6 @@
+// Copy this file to `Local.xcconfig` (gitignored) and set your Apple Developer
+// team so xcodegen-generated projects sign without editing the committed spec:
+//
+//   cp Signing.local.xcconfig.example Local.xcconfig
+//
+DEVELOPMENT_TEAM = YOUR_TEAM_ID

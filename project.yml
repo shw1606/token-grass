@@ -7,13 +7,20 @@ options:
   createIntermediateGroups: true
   generateEmptyDirectories: true
 
+# DEVELOPMENT_TEAM comes from Signing.xcconfig, which optionally includes a
+# gitignored Local.xcconfig — so the team stays out of the public repo. Copy
+# Signing.local.xcconfig.example → Local.xcconfig and set your team (or just
+# pick it in Xcode's Signing & Capabilities).
+configFiles:
+  Debug: Signing.xcconfig
+  Release: Signing.xcconfig
+
 settings:
   base:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: HTV7346Y9P
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
 
 packages:
