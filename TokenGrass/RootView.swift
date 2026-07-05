@@ -97,16 +97,16 @@ struct RootView: View {
                 Label("Synced from your Mac", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.green)
-                Text("Your grass updates automatically from the TokenGrass companion running on your Mac — over iCloud, with no account and no servers.")
+                Text("Your grass updates automatically from the TokenGrass app on your Mac, over iCloud. No account, no servers.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
                 Label("Showing demo data", systemImage: "circle.dashed")
                     .font(.subheadline.weight(.medium))
-                Text("To grow your real grass, install the free TokenGrass companion on the Mac where you use Claude Code. It reads your usage locally and syncs it here over iCloud — no account, no servers, nothing sent to us.")
+                Text("Want your real grass? Install the free TokenGrass app on the Mac where you use Claude Code. It reads your usage there and syncs it to your phone over iCloud. No login, no servers, nothing sent to us.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                Link("Get the Mac companion", destination: URL(string: "https://github.com/shw1606/token-grass")!)
+                Link("Get the Mac app", destination: URL(string: "https://github.com/shw1606/token-grass")!)
                     .font(.footnote.weight(.medium))
                     .padding(.top, 2)
             }
@@ -125,7 +125,7 @@ struct RootView: View {
     }
 
     private var disclaimer: some View {
-        Text("Independent open-source project — not affiliated with or endorsed by Anthropic. \"Claude\" and \"Claude Code\" are trademarks of Anthropic.")
+        Text("Independent open-source project, not affiliated with or endorsed by Anthropic. \"Claude\" and \"Claude Code\" are trademarks of Anthropic.")
             .font(.caption2)
             .foregroundStyle(.tertiary)
     }

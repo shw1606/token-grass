@@ -1,17 +1,17 @@
 # TokenGrass 🌱
 
-> Your Claude usage as a GitHub-style contribution graph — on your iPhone home-screen widget. Free, open source.
+> Your Claude usage as a GitHub-style contribution graph, on your iPhone home-screen widget. Free, open source.
 
 <p align="center">
-  <img src="docs/screenshots/app-light.png" width="270" alt="TokenGrass — light mode">
+  <img src="docs/screenshots/app-light.png" width="270" alt="TokenGrass, light mode">
   &nbsp;&nbsp;
-  <img src="docs/screenshots/app-dark.png" width="270" alt="TokenGrass — dark mode">
+  <img src="docs/screenshots/app-dark.png" width="270" alt="TokenGrass, dark mode">
 </p>
 
-<p align="center"><sub>Demo data shown — running on the iOS 26 simulator.</sub></p>
+<p align="center"><sub>Demo data shown, running on the iOS 26 simulator.</sub></p>
 
 TokenGrass turns your daily Claude usage into a familiar contribution heatmap and
-puts it **directly on your home screen as a widget** — glance, don't tap. No paywall.
+puts it **directly on your home screen as a widget**, glance, don't tap. No paywall.
 
 <p align="center">
   <img src="docs/screenshots/widget-small.png" width="150" alt="Small (2×2) grass widget">
@@ -19,7 +19,7 @@ puts it **directly on your home screen as a widget** — glance, don't tap. No p
   <img src="docs/screenshots/widget-medium.png" width="322" alt="Medium (4×2) grass widget">
 </p>
 
-<p align="center"><sub>The home-screen widget in both sizes — pixel-matched to GitHub's contribution graph, in Claude orange. Demo data.</sub></p>
+<p align="center"><sub>The home-screen widget in both sizes, pixel-matched to GitHub's contribution graph, in Claude orange. Demo data.</sub></p>
 
 **Status:** working prototype. A macOS menu-bar companion reads your usage and
 renders the grass live; iCloud sync to the iPhone widget is code-complete and turns
@@ -29,7 +29,7 @@ on with a paid Apple Developer account. See [`docs/ARCHITECTURE.md`](docs/ARCHIT
 
 Anthropic doesn't let third-party apps log in as you or read your subscription
 usage from the phone, so the data is collected on your Mac (where you're already
-signed into Claude Code) and synced to the phone — the same shape as the validated
+signed into Claude Code) and synced to the phone, the same shape as the validated
 "Usage for Claude", plus the home-screen **grass widget** it lacks.
 
 ```
@@ -50,7 +50,7 @@ signed into Claude Code) and synced to the phone — the same shape as the valid
 
 ```
 token-grass/
-├─ TokenGrassCore/      # Pure logic (Foundation-only) — models, grass math, accumulator, OAuth/usage parsing. Unit-tested.
+├─ TokenGrassCore/      # Pure logic (Foundation-only), models, grass math, accumulator, OAuth/usage parsing. Unit-tested.
 │  └─ TokenGrassPoll/   #   dev CLI: validate keychain → usage → accumulate headlessly
 ├─ SharedUI/            # SwiftUI grass views (cross-platform) + iCloud store
 ├─ TokenGrass/          # iOS app target (display + iCloud pull)
@@ -99,7 +99,7 @@ may stop working if Anthropic changes them.
 
 ## Privacy
 
-TokenGrass collects nothing — no account, no backend, no analytics. Your Claude
+TokenGrass collects nothing, no account, no backend, no analytics. Your Claude
 credentials never leave your Mac; only a few KB of daily usage summary syncs
 between your own devices via iCloud. See [PRIVACY.md](PRIVACY.md).
 
