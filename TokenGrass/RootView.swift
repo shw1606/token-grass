@@ -40,7 +40,7 @@ struct RootView: View {
                 demoBadge
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                GrassChartView(grid: yearGrid, theme: .claudeOrange, cellSize: 11, spacing: 2.5, showMonthLabels: true)
+                GrassChartView(grid: yearGrid, theme: .claudeOrange, cellSize: 11, spacing: 2.5, showMonthLabels: true, onDark: true)
                     .padding(.vertical, 2)
             }
             .defaultScrollAnchor(.trailing)

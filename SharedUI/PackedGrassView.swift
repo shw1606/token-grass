@@ -52,9 +52,10 @@ public struct PackedGrassView: View {
     }
 
     private func color(for item: GrassCell, thresholds: LevelThresholds) -> Color {
-        // Future days render as empty so the grid stays a solid rounded block.
-        let level = item.isFuture ? GrassLevel.empty : thresholds.level(for: item.tokens)
-        return theme.color(for: level, onDark: true)
+        // Future days in the current week render blank (no cell), like GitHub —
+        // the current week is a short stub at the right edge, not a full column.
+        guard !item.isFuture else { return .clear }
+        return theme.color(for: thresholds.level(for: item.tokens), onDark: true)
     }
 
     private func shape(col: Int, row: Int, lastCol: Int, inner: CGFloat, outer: CGFloat) -> UnevenRoundedRectangle {

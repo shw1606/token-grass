@@ -9,19 +9,22 @@ public struct GrassGridView: View {
     private let cellSize: CGFloat
     private let spacing: CGFloat
     private let cornerRadius: CGFloat
+    private let onDark: Bool
 
     public init(
         grid: GrassGrid,
         theme: GrassTheme = .githubGreen,
         cellSize: CGFloat = 11,
         spacing: CGFloat = 2.5,
-        cornerRadius: CGFloat = 2
+        cornerRadius: CGFloat = 2,
+        onDark: Bool = false
     ) {
         self.grid = grid
         self.theme = theme
         self.cellSize = cellSize
         self.spacing = spacing
         self.cornerRadius = cornerRadius
+        self.onDark = onDark
     }
 
     public var body: some View {
@@ -40,6 +43,6 @@ public struct GrassGridView: View {
     }
 
     private func fill(for cell: GrassCell, thresholds: LevelThresholds) -> Color {
-        cell.isFuture ? Color.clear : theme.color(for: thresholds.level(for: cell.tokens))
+        cell.isFuture ? Color.clear : theme.color(for: thresholds.level(for: cell.tokens), onDark: onDark)
     }
 }

@@ -9,19 +9,22 @@ public struct GrassChartView: View {
     private let cellSize: CGFloat
     private let spacing: CGFloat
     private let showMonthLabels: Bool
+    private let onDark: Bool
 
     public init(
         grid: GrassGrid,
         theme: GrassTheme = .githubGreen,
         cellSize: CGFloat = 11,
         spacing: CGFloat = 2.5,
-        showMonthLabels: Bool = true
+        showMonthLabels: Bool = true,
+        onDark: Bool = false
     ) {
         self.grid = grid
         self.theme = theme
         self.cellSize = cellSize
         self.spacing = spacing
         self.showMonthLabels = showMonthLabels
+        self.onDark = onDark
     }
 
     public var body: some View {
@@ -34,7 +37,8 @@ public struct GrassChartView: View {
                 theme: theme,
                 cellSize: cellSize,
                 spacing: spacing,
-                cornerRadius: max(1, cellSize * 0.2)
+                cornerRadius: max(1, cellSize * 0.2),
+                onDark: onDark
             )
         }
     }
