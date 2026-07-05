@@ -90,26 +90,52 @@
 ## 5. 앱스토어 설명 초안 (영문, 수정용 골격)
 
 ```
-TokenGrass — Your Claude Code usage, as a contribution graph. Right on your home screen.
+TokenGrass — Your Claude Code usage, as a contribution graph, right on your home screen.
 
-TokenGrass turns your daily Claude Code token usage into a familiar
-GitHub-style contribution heatmap — and puts it directly on your iPhone
-home screen as a widget. No need to open the app. No Mac required.
+TokenGrass turns your daily Claude Code usage into a familiar GitHub-style
+contribution heatmap — and puts it directly on your iPhone home screen as a
+widget. Glance, don't tap.
 
-• The grass lives in the widget — glance, don't tap
-• Works phone-only — no companion Mac app needed
-• 100% on-device — your token stays in the iOS Keychain, never sent to our servers
-• Completely free — every feature, full history, no paywall, no IAP
-• No account, no tracking, no ads
+• The grass lives in the widget — 2×2 and 4×2, pixel-matched to GitHub's graph
+• A free Mac companion collects your usage and syncs it here over iCloud
+• 100% on-device — no account, no servers, nothing is sent to us
+• Completely free — every feature, full history, no paywall, no ads
 • Open source (MIT)
 
-Setup takes one paste: run the helper command on your computer,
-paste the result once, and your grass starts growing.
+How it works: install the free TokenGrass companion on the Mac where you use
+Claude Code. It reads your usage locally and syncs a tiny summary to your iPhone
+over iCloud — no login, no backend. Your Claude credentials never leave your Mac.
 
-TokenGrass is an independent, open-source project and is not affiliated
-with, endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code"
-are trademarks of Anthropic. This app uses unofficial endpoints and may
-stop working if those change.
+Requires the free macOS companion (download link inside the app) and Claude Code
+installed on that Mac.
+
+TokenGrass is an independent, open-source project and is not affiliated with,
+endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are trademarks
+of Anthropic. This app uses unofficial endpoints and may stop working if those
+change.
+```
+
+### 5.1 App Review 노트 (App Store Connect "Notes" 칸에 그대로 붙여넣기)
+
+```
+TokenGrass visualizes the user's own Claude Code (developer CLI) usage as a
+home-screen widget.
+
+No login is required to review the app. Launched without the optional macOS
+companion, the app and widget show clearly-labeled DEMO data, so all
+functionality is fully reviewable on-device. To display real data, a free,
+open-source macOS companion (download link shown in the app) reads the user's own
+usage on their Mac and syncs a small summary through the user's private iCloud
+(NSUbiquitousKeyValueStore).
+
+- No account, no backend server; we collect no data (App Privacy: Data Not Collected).
+- The iOS app makes no network calls of its own — it only reads a few KB from the
+  user's own iCloud key-value store.
+- Only Apple public frameworks are used (SwiftUI, WidgetKit); no private APIs.
+- "Claude"/"Claude Code" are Anthropic trademarks. TokenGrass is an independent,
+  unaffiliated open-source project (disclaimer shown in-app and in the listing).
+
+Source code: https://github.com/shw1606/token-grass
 ```
 
 한국어 현지화는 출시 후 프로모션 텍스트로 병행.

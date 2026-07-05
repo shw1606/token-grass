@@ -91,13 +91,25 @@ struct RootView: View {
 
     // MARK: - Status & footer
 
-    private var statusCard: some View {
+    @ViewBuilder private var statusCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Not connected", systemImage: "circle.dashed")
-                .font(.subheadline.weight(.medium))
-            Text("Paste your Claude Code token to grow your real grass. Coming in a later phase — this build shows demo data.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            if isReal {
+                Label("Synced from your Mac", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.green)
+                Text("Your grass updates automatically from the TokenGrass companion running on your Mac — over iCloud, with no account and no servers.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("Showing demo data", systemImage: "circle.dashed")
+                    .font(.subheadline.weight(.medium))
+                Text("To grow your real grass, install the free TokenGrass companion on the Mac where you use Claude Code. It reads your usage locally and syncs it here over iCloud — no account, no servers, nothing sent to us.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Link("Get the Mac companion", destination: URL(string: "https://github.com/shw1606/token-grass")!)
+                    .font(.footnote.weight(.medium))
+                    .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()

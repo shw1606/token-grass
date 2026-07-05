@@ -97,6 +97,12 @@ endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are trademark
 of Anthropic. It uses unofficial endpoints and your existing Claude Code login, and
 may stop working if Anthropic changes them.
 
+## Privacy
+
+TokenGrass collects nothing — no account, no backend, no analytics. Your Claude
+credentials never leave your Mac; only a few KB of daily usage summary syncs
+between your own devices via iCloud. See [PRIVACY.md](PRIVACY.md).
+
 ## License
 
 [MIT](LICENSE)
