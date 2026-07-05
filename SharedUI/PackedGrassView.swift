@@ -18,7 +18,7 @@ public struct PackedGrassView: View {
     private let innerRadiusRatio: CGFloat = 0.15
     private let cornerCellRadiusRatio: CGFloat = 0.77
 
-    public init(grid: GrassGrid, theme: GrassTheme = .claudeOrange, gapRatio: CGFloat = 0.26) {
+    public init(grid: GrassGrid, theme: GrassTheme = .claudeOrange, gapRatio: CGFloat = 0.28) {
         self.grid = grid
         self.theme = theme
         self.gapRatio = gapRatio
@@ -27,11 +27,17 @@ public struct PackedGrassView: View {
     public var body: some View {
         let thresholds = grid.thresholds
         GeometryReader { proxy in
-            let cell = proxy.size.height / (7 + 6 * gapRatio) // fill height with 7 rows
-            let gap = cell * gapRatio
-            let stride = cell + gap
-            let maxColumns = max(1, Int((proxy.size.width + gap) / stride))
-            let columns = Array(grid.columns.suffix(maxColumns))
+            let g = gapRatio
+            // Fill the WIDTH (like GitHub): use the fewest columns whose square
+            // cells span the full width while still fitting 7 rows in the height.
+            // A wide widget gets more (smaller) columns and a little vertical
+            // margin; a square widget lands on 7 columns filling both axes.
+            let cellByHeight = proxy.size.height / (7 + 6 * g)
+            let needed = (proxy.size.width / cellByHeight + g) / (1 + g)
+            let nCols = max(1, min(Int(needed.rounded(.up)), grid.columns.count))
+            let cell = proxy.size.width / (CGFloat(nCols) + CGFloat(nCols - 1) * g)
+            let gap = cell * g
+            let columns = Array(grid.columns.suffix(nCols))
             let lastCol = columns.count - 1
             let inner = cell * innerRadiusRatio
             let outer = cell * cornerCellRadiusRatio
@@ -47,7 +53,9 @@ public struct PackedGrassView: View {
                     }
                 }
             }
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
+            // Grid fills the width exactly; center the (possibly shorter) stack
+            // vertically so the top/bottom margins are even.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }
 
