@@ -120,7 +120,8 @@ final class UsageService: ObservableObject {
         accumulator.apply(
             utilization: usage.sevenDay.utilization,
             resetAt: usage.sevenDay.resetsAt,
-            now: Date()
+            now: Date(),
+            fiveHour: usage.fiveHour.utilization
         )
         MacStateStore.save(accumulator.state)
         // Push to iCloud on the first sync of a session (so new devices get the

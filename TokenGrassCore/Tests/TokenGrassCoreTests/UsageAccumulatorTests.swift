@@ -95,4 +95,22 @@ final class UsageAccumulatorTests: XCTestCase {
         // A merge with nothing larger reports no change.
         XCTAssertFalse(acc.mergeDaily(["2026-06-25": 1]))
     }
+
+    func testFirstPollSeedsTodayFromFiveHour() {
+        // A brand-new install: the first poll has no 7d delta, so today would be
+        // empty — the 5-hour value seeds it so it isn't blank.
+        var acc = UsageAccumulator(calendar: cal)
+        acc.apply(utilization: 69, resetAt: weeklyReset, now: at(2026, 6, 27, 10), fiveHour: 30)
+        XCTAssertEqual(acc.state.daily["2026-06-27"], 30)
+        // Later polls add the real 7d delta on top of the seed.
+        acc.apply(utilization: 74, resetAt: weeklyReset, now: at(2026, 6, 27, 14), fiveHour: 40)
+        XCTAssertEqual(acc.state.daily["2026-06-27"], 35) // 30 + (74 - 69)
+    }
+
+    func testFiveHourSeedsOnlyOnFirstPoll() {
+        var acc = UsageAccumulator(calendar: cal)
+        acc.apply(utilization: 50, resetAt: weeklyReset, now: at(2026, 6, 27, 10), fiveHour: 20)
+        acc.apply(utilization: 50, resetAt: weeklyReset, now: at(2026, 6, 27, 12), fiveHour: 80)
+        XCTAssertEqual(acc.state.daily["2026-06-27"], 20) // no delta, no re-seed
+    }
 }

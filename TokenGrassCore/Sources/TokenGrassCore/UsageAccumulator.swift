@@ -47,8 +47,10 @@ public struct UsageAccumulator {
         self.retentionDays = retentionDays
     }
 
-    /// Apply one poll. `utilization` = `seven_day.utilization`, `resetAt` = its `resets_at`.
-    public mutating func apply(utilization: Double, resetAt: Date, now: Date) {
+    /// Apply one poll. `utilization` = `seven_day.utilization`, `resetAt` = its
+    /// `resets_at`. `fiveHour` = `five_hour.utilization`, used only to seed today
+    /// on the very first poll (see below).
+    public mutating func apply(utilization: Double, resetAt: Date, now: Date, fiveHour: Double = 0) {
         defer { prune(now: now) }
 
         guard
@@ -56,7 +58,13 @@ public struct UsageAccumulator {
             let lastAt = state.lastAt,
             let lastResetAt = state.lastResetAt
         else {
-            snapshot(utilization, now, resetAt) // first poll = baseline only
+            // First poll: baseline the 7-day counter. There's no prior value to
+            // diff, so today would otherwise render empty even when there's clear
+            // recent activity — seed it from the 5-hour window so it isn't blank.
+            if fiveHour > 0, let today = dayKeys(from: now, to: now).first {
+                state.daily[today, default: 0] += fiveHour
+            }
+            snapshot(utilization, now, resetAt)
             return
         }
 
