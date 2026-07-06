@@ -21,9 +21,16 @@ puts it **directly on your home screen as a widget**, glance, don't tap. No payw
 
 <p align="center"><sub>The home-screen widget in both sizes, pixel-matched to GitHub's contribution graph, in Claude orange. Demo data.</sub></p>
 
-**Status:** working prototype. A macOS menu-bar companion reads your usage and
-renders the grass live; iCloud sync to the iPhone widget is code-complete and turns
-on with a paid Apple Developer account. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+## Get started
+
+TokenGrass comes in two parts:
+
+1. **iPhone app + widget** — from the App Store _(in review)_.
+2. **Free Mac app** — [**⬇️ Download for Mac**](https://github.com/shw1606/token-grass/releases/latest). Open it once. It lives in your menu bar, reads your Claude Code usage, and syncs to your phone over iCloud.
+
+Then add the TokenGrass widget to your home screen. Your grass fills in as you use Claude Code. No account, no servers, and your Claude login never leaves your Mac.
+
+> **You'll need:** a Mac with [Claude Code](https://docs.claude.com/en/docs/claude-code) installed and logged in, and the same iCloud account on your Mac and iPhone.
 
 ## How it works
 
