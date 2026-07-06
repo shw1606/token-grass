@@ -78,6 +78,19 @@ public struct UsageAccumulator {
         state.daily.mapValues { Int(($0 * 100).rounded()) }
     }
 
+    /// Merge in daily intensities restored from elsewhere (e.g. iCloud on a fresh
+    /// install), keeping the larger value per day so nothing already recorded is lost.
+    /// Returns true if anything changed.
+    @discardableResult
+    public mutating func mergeDaily(_ daily: [String: Double]) -> Bool {
+        var changed = false
+        for (day, value) in daily where value > (state.daily[day] ?? 0) {
+            state.daily[day] = value
+            changed = true
+        }
+        return changed
+    }
+
     // MARK: - Internals
 
     private mutating func snapshot(_ value: Double, _ at: Date, _ resetAt: Date) {

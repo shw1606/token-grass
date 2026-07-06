@@ -24,6 +24,11 @@ final class UsageService: ObservableObject {
 
     init() {
         accumulator = UsageAccumulator(state: MacStateStore.load(), calendar: .grass())
+        // Restore from iCloud so a fresh install (or a brand-new Mac) picks up the
+        // existing grass instead of starting blank. Merge keeps the larger value
+        // per day, so a reinstall never loses what's already recorded.
+        NSUbiquitousKeyValueStore.default.synchronize()
+        if let cloud = ICloudGrassStore.read()?.daily { accumulator.mergeDaily(cloud) }
         refreshGrid()
         Task { await sync() }
         // Poll every 5 min while awake (the menu bar shows the % continuously)…
@@ -40,6 +45,24 @@ final class UsageService: ObservableObject {
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
                 await self?.sync()
             }
+        }
+        // iCloud KVS downloads in the background; merge late-arriving data so a
+        // fresh install restores its history even if it wasn't ready at launch.
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: NSUbiquitousKeyValueStore.default, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.restoreFromICloud() }
+        }
+    }
+
+    /// Merge grass that arrived from iCloud (e.g. after a fresh install) into the
+    /// local accumulator, so history is restored rather than overwritten.
+    private func restoreFromICloud() {
+        guard let cloud = ICloudGrassStore.read()?.daily, !cloud.isEmpty else { return }
+        if accumulator.mergeDaily(cloud) {
+            MacStateStore.save(accumulator.state)
+            refreshGrid()
         }
     }
 
@@ -102,8 +125,10 @@ final class UsageService: ObservableObject {
         MacStateStore.save(accumulator.state)
         // Push to iCloud on the first sync of a session (so new devices get the
         // current grass), then only when it actually changes — the KVS throttles
-        // frequent writes, and 5-min polling is usually a no-op.
-        if accumulator.state.daily != before || !hasPushedICloud {
+        // frequent writes, and 5-min polling is usually a no-op. Never push an
+        // empty summary: on a fresh install (before iCloud has downloaded) that
+        // would wipe the phone's grass.
+        if !accumulator.state.daily.isEmpty, accumulator.state.daily != before || !hasPushedICloud {
             ICloudGrassStore.write(GrassPayload(daily: accumulator.state.daily, updatedAt: Date()))
             hasPushedICloud = true
             refreshGrid()

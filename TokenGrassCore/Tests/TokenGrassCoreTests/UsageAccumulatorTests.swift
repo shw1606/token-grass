@@ -80,4 +80,19 @@ final class UsageAccumulatorTests: XCTestCase {
         acc.apply(utilization: 21, resetAt: weeklyReset, now: at(2026, 6, 27, 12))
         XCTAssertNil(acc.state.daily["2026-01-01"])
     }
+
+    func testMergeDailyRestoresAndKeepsLargerPerDay() {
+        // Simulates a fresh install seeded from iCloud: empty local + cloud data.
+        var fresh = UsageAccumulator(calendar: cal)
+        XCTAssertTrue(fresh.mergeDaily(["2026-06-25": 5, "2026-06-26": 8]))
+        XCTAssertEqual(fresh.state.daily, ["2026-06-25": 5, "2026-06-26": 8])
+
+        // Merging keeps the larger value per day and never lowers an existing one.
+        var acc = UsageAccumulator(state: AccumulatorState(daily: ["2026-06-25": 10, "2026-06-26": 3]), calendar: cal)
+        let changed = acc.mergeDaily(["2026-06-25": 4, "2026-06-26": 9, "2026-06-27": 2])
+        XCTAssertTrue(changed)
+        XCTAssertEqual(acc.state.daily, ["2026-06-25": 10, "2026-06-26": 9, "2026-06-27": 2])
+        // A merge with nothing larger reports no change.
+        XCTAssertFalse(acc.mergeDaily(["2026-06-25": 1]))
+    }
 }
