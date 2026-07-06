@@ -7,6 +7,9 @@ import TokenGrassCore
 struct RootView: View {
     @ObservedObject var sync: ICloudSync
 
+    /// The Mac-download landing page (opened on the Mac, or shared to it).
+    private let setupURL = URL(string: "https://shw1606.github.io/token-grass")!
+
     private var isReal: Bool { sync.snapshot != nil }
     private var snapshot: UsageSnapshot { sync.snapshot ?? DemoData.snapshot(weeks: 53) }
 
@@ -101,14 +104,31 @@ struct RootView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                Label("Showing demo data", systemImage: "circle.dashed")
-                    .font(.subheadline.weight(.medium))
-                Text("Want your real grass? Install the free TokenGrass app on the Mac where you use Claude Code. It reads your usage there and syncs it to your phone over iCloud. No login, no servers, nothing sent to us.")
+                Label("Set it up on your Mac", systemImage: "macbook.and.iphone")
+                    .font(.subheadline.weight(.semibold))
+                Text("TokenGrass collects your usage on the Mac where you use Claude Code, then syncs it here over iCloud. This grass is a demo until then. No account, no servers, nothing sent to anyone.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                Link("Get the Mac app", destination: URL(string: "https://github.com/shw1606/token-grass")!)
-                    .font(.footnote.weight(.medium))
-                    .padding(.top, 2)
+
+                // The download lives on the Mac, so give an address to open there
+                // plus a one-tap way to send the link across.
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("On your Mac, open").font(.caption2).foregroundStyle(.secondary)
+                    Text("shw1606.github.io/token-grass")
+                        .font(.footnote.weight(.semibold)).monospaced()
+                        .foregroundStyle(Color(red: 0.91, green: 0.44, blue: 0.13))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.top, 2)
+
+                ShareLink(item: setupURL) {
+                    Label("Send the link to my Mac", systemImage: "square.and.arrow.up")
+                        .font(.footnote.weight(.medium))
+                }
+                .padding(.top, 2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
