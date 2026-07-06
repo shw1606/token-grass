@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let popover = NSPopover()
     private var cancellables = Set<AnyCancellable>()
     private var appearanceObservation: NSKeyValueObservation?
+    private var lastRenderKey = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -52,6 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func render() {
         guard let button = statusItem.button else { return }
         let isDark = button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+
+        // Only rebuild the image when what it shows actually changes. Crucial: the
+        // last line sets `button.image`, which itself re-notifies `effectiveAppearance`
+        // — without this guard the appearance observer would re-enter render() forever
+        // and peg a CPU core at 100%.
+        let key = "\(isDark)|\(Int(service.fiveHour.rounded()))|\(Int(service.sevenDay.rounded()))|\(service.lastSync != nil)"
+        guard key != lastRenderKey else { return }
+        lastRenderKey = key
 
         let renderer = ImageRenderer(content:
             MenuBarLabel(service: service)

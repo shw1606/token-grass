@@ -4,6 +4,8 @@ import TokenGrassCore
 struct MenuContentView: View {
     @ObservedObject var service: UsageService
     @State private var launchAtLogin = LoginItem.isEnabled
+    /// Stable anchor for the countdown's TimelineView (never `.now`, which spins).
+    @State private var timelineAnchor = Date()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -90,8 +92,11 @@ struct MenuContentView: View {
         HStack(alignment: .top) {
             statTile("5시간 세션", service.fiveHour) {
                 // Live countdown — 5-hour window is close, so relative reads best.
+                // Anchor the schedule to a FIXED date: `.now` is re-evaluated every
+                // render, which keeps invalidating the schedule and spins the CPU
+                // at 100%. A stable @State anchor ticks every 30s as intended.
                 if let resetsAt = service.fiveHourResetsAt {
-                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                    TimelineView(.periodic(from: timelineAnchor, by: 30)) { context in
                         resetLabel(countdownCaption(resetsAt, now: context.date))
                     }
                 }
