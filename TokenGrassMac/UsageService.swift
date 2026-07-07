@@ -21,8 +21,19 @@ final class UsageService: ObservableObject {
 
     private var accumulator: UsageAccumulator
     private var timer: Timer?
+    /// Held for the app's lifetime to opt out of App Nap. As a menu-bar-only
+    /// (LSUIElement) app with no window, macOS can throttle our background
+    /// 5-min Timer heavily once napped — a transient sync error can then sit
+    /// unrefreshed far longer than intended. `.userInitiatedAllowingIdleSystemSleep`
+    /// only disables App Nap for this process; it does NOT keep the Mac itself
+    /// awake (unlike `caffeinate`), so normal sleep/wake behavior is unaffected.
+    private var activityToken: NSObjectProtocol?
 
     init() {
+        activityToken = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiatedAllowingIdleSystemSleep,
+            reason: "Keep syncing Claude usage on schedule"
+        )
         accumulator = UsageAccumulator(state: MacStateStore.load(), calendar: .grass())
         // Restore from iCloud so a fresh install (or a brand-new Mac) picks up the
         // existing grass instead of starting blank. Merge keeps the larger value
