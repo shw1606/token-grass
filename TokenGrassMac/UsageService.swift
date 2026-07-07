@@ -202,6 +202,13 @@ final class UsageService: ObservableObject {
             fiveHour: usage.fiveHour.utilization
         )
         MacStateStore.save(accumulator.state)
+        // Always refresh the in-memory grid — this is just a cheap local
+        // recompute against the current Date(), and it's what makes today's
+        // (empty) cell appear right after midnight even on a quiet night with
+        // zero usage delta. Gating this behind "did the data change" (as we
+        // used to) left the grid frozen on yesterday until usage resumed,
+        // since a flat 0% delta never touched accumulator.state.daily.
+        refreshGrid()
         // Push to iCloud on the first sync of a session (so new devices get the
         // current grass), then only when it actually changes — the KVS throttles
         // frequent writes, and 5-min polling is usually a no-op. Never push an
@@ -210,7 +217,6 @@ final class UsageService: ObservableObject {
         if !accumulator.state.daily.isEmpty, accumulator.state.daily != before || !hasPushedICloud {
             ICloudGrassStore.write(GrassPayload(daily: accumulator.state.daily, updatedAt: Date()))
             hasPushedICloud = true
-            refreshGrid()
         }
     }
 
