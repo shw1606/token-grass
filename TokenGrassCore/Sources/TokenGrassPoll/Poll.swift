@@ -39,10 +39,10 @@ func runPoll() {
         fail("응답 파싱 실패: \(error)")
     }
 
+    let resetsDescription = usage.sevenDay.resetsAt.map { ISO8601DateFormatter().string(from: $0) } ?? "unknown"
     print(String(
         format: "five_hour: %.1f%%   seven_day: %.1f%% (resets %@)\n",
-        usage.fiveHour.utilization, usage.sevenDay.utilization,
-        ISO8601DateFormatter().string(from: usage.sevenDay.resetsAt)
+        usage.fiveHour.utilization, usage.sevenDay.utilization, resetsDescription
     ))
 
     var accumulator = UsageAccumulator(state: StateStore.load(), calendar: .grass())

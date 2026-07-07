@@ -48,15 +48,19 @@ public struct UsageAccumulator {
     }
 
     /// Apply one poll. `utilization` = `seven_day.utilization`, `resetAt` = its
-    /// `resets_at`. `fiveHour` = `five_hour.utilization`, used only to seed today
-    /// on the very first poll (see below).
-    public mutating func apply(utilization: Double, resetAt: Date, now: Date, fiveHour: Double = 0) {
+    /// `resets_at` — the endpoint can return `null` here (observed in the wild,
+    /// seemingly around an actual window boundary); when it does, we fall back
+    /// to the last known reset time rather than losing the poll entirely.
+    /// `fiveHour` = `five_hour.utilization`, used only to seed today on the very
+    /// first poll (see below).
+    public mutating func apply(utilization: Double, resetAt: Date?, now: Date, fiveHour: Double = 0) {
         defer { prune(now: now) }
+
+        let effectiveResetAt = resetAt ?? state.lastResetAt
 
         guard
             let lastValue = state.lastValue,
-            let lastAt = state.lastAt,
-            let lastResetAt = state.lastResetAt
+            let lastAt = state.lastAt
         else {
             // First poll: baseline the 7-day counter. There's no prior value to
             // diff, so today would otherwise render empty even when there's clear
@@ -64,12 +68,19 @@ public struct UsageAccumulator {
             if fiveHour > 0, let today = dayKeys(from: now, to: now).first {
                 state.daily[today, default: 0] += fiveHour
             }
-            snapshot(utilization, now, resetAt)
+            snapshot(utilization, now, effectiveResetAt)
             return
         }
 
         // resets_at carries per-poll microsecond jitter, so compare with tolerance.
-        let sameWindow = abs(resetAt.timeIntervalSince(lastResetAt)) < windowTolerance
+        // With no reset time to compare (this poll's was null and we've never
+        // seen one), we have no evidence of a rollover, so assume same window.
+        let sameWindow: Bool
+        if let effectiveResetAt, let lastResetAt = state.lastResetAt {
+            sameWindow = abs(effectiveResetAt.timeIntervalSince(lastResetAt)) < windowTolerance
+        } else {
+            sameWindow = true
+        }
         let delta = sameWindow ? max(0, utilization - lastValue) : max(0, utilization)
 
         let days = dayKeys(from: lastAt, to: now)
@@ -77,7 +88,7 @@ public struct UsageAccumulator {
             let share = delta / Double(days.count)
             for key in days { state.daily[key, default: 0] += share }
         }
-        snapshot(utilization, now, resetAt)
+        snapshot(utilization, now, effectiveResetAt)
     }
 
     /// Day → integer "centi-percent" (×100) so the existing Int-based grid/level
@@ -101,7 +112,7 @@ public struct UsageAccumulator {
 
     // MARK: - Internals
 
-    private mutating func snapshot(_ value: Double, _ at: Date, _ resetAt: Date) {
+    private mutating func snapshot(_ value: Double, _ at: Date, _ resetAt: Date?) {
         state.lastValue = value
         state.lastAt = at
         state.lastResetAt = resetAt

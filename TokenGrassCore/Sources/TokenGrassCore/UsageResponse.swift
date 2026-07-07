@@ -4,9 +4,13 @@ import Foundation
 /// (0–100) of an opaque limit; the endpoint exposes **no token counts**.
 public struct UsageWindow: Equatable, Sendable {
     public let utilization: Double
-    public let resetsAt: Date
+    /// Observed in the wild: the endpoint can return `resets_at: null` (seemingly
+    /// right around an actual window boundary). Optional so that doesn't take
+    /// down the whole response — a missing reset time just means we can't show
+    /// a countdown/clock for this window this poll.
+    public let resetsAt: Date?
 
-    public init(utilization: Double, resetsAt: Date) {
+    public init(utilization: Double, resetsAt: Date?) {
         self.utilization = utilization
         self.resetsAt = resetsAt
     }
@@ -21,14 +25,18 @@ extension UsageWindow: Decodable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.utilization = try container.decode(Double.self, forKey: .utilization)
-        let raw = try container.decode(String.self, forKey: .resetsAt)
-        guard let date = ISO8601.flexible(raw) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .resetsAt, in: container,
-                debugDescription: "Unparseable resets_at: \(raw)"
-            )
+        if let raw = try container.decodeIfPresent(String.self, forKey: .resetsAt) {
+            // A present-but-unparseable string is still a real problem — fail loud.
+            guard let date = ISO8601.flexible(raw) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .resetsAt, in: container,
+                    debugDescription: "Unparseable resets_at: \(raw)"
+                )
+            }
+            self.resetsAt = date
+        } else {
+            self.resetsAt = nil
         }
-        self.resetsAt = date
     }
 }
 

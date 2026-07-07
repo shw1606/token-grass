@@ -19,8 +19,23 @@ final class UsageResponseTests: XCTestCase {
         XCTAssertEqual(response.sevenDay.utilization, 41.0)
         XCTAssertEqual(response.sevenDaySonnet?.utilization, 4.0)
         // Microsecond fraction parsed down to the right instant.
-        XCTAssertEqual(utc.component(.hour, from: response.sevenDay.resetsAt), 16)
-        XCTAssertEqual(utc.component(.hour, from: response.fiveHour.resetsAt), 22)
+        XCTAssertEqual(utc.component(.hour, from: try XCTUnwrap(response.sevenDay.resetsAt)), 16)
+        XCTAssertEqual(utc.component(.hour, from: try XCTUnwrap(response.fiveHour.resetsAt)), 22)
+    }
+
+    func testNullResetsAtIsOptionalNotFatal() throws {
+        // Observed in the wild: the endpoint can return `resets_at: null` (seemingly
+        // right around an actual window boundary). A single null field must not
+        // take down the whole response — the utilization is still good data.
+        let json = #"""
+        {"five_hour":{"utilization":0.0,"resets_at":null},
+         "seven_day":{"utilization":98.0,"resets_at":"2026-07-08T16:00:00.366178+00:00"}}
+        """#.data(using: .utf8)!
+        let response = try UsageResponse.parse(json)
+        XCTAssertEqual(response.fiveHour.utilization, 0.0)
+        XCTAssertNil(response.fiveHour.resetsAt)
+        XCTAssertEqual(response.sevenDay.utilization, 98.0)
+        XCTAssertNotNil(response.sevenDay.resetsAt)
     }
 
     func testNullSonnetIsOptional() throws {

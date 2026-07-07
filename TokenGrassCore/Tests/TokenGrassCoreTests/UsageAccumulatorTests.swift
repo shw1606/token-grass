@@ -35,6 +35,29 @@ final class UsageAccumulatorTests: XCTestCase {
         XCTAssertEqual(acc.state.daily["2026-06-27"] ?? -1, 2.0, accuracy: 0.0001)
     }
 
+    func testNilResetAtFallsBackToLastKnown() {
+        // Observed in the wild: the endpoint can return resets_at: null. A poll
+        // with no reset time must still accumulate (using the last known reset
+        // time as a same-window reference) instead of the whole poll going to waste.
+        var acc = UsageAccumulator(calendar: cal)
+        acc.apply(utilization: 41, resetAt: weeklyReset, now: at(2026, 6, 27, 10))
+        acc.apply(utilization: 43, resetAt: nil, now: at(2026, 6, 27, 14))
+        XCTAssertEqual(acc.state.daily["2026-06-27"] ?? -1, 2.0, accuracy: 0.0001)
+        // The last known reset time is preserved for the next poll's comparison.
+        XCTAssertEqual(acc.state.lastResetAt, weeklyReset)
+        // And a later poll with a real resets_at still detects the window correctly.
+        acc.apply(utilization: 44, resetAt: weeklyReset, now: at(2026, 6, 27, 16))
+        XCTAssertEqual(acc.state.daily["2026-06-27"] ?? -1, 3.0, accuracy: 0.0001)
+    }
+
+    func testNilResetAtOnFirstPollDoesNotCrash() {
+        var acc = UsageAccumulator(calendar: cal)
+        acc.apply(utilization: 41, resetAt: nil, now: at(2026, 6, 27, 10))
+        XCTAssertTrue(acc.state.daily.isEmpty)
+        XCTAssertNil(acc.state.lastResetAt)
+        XCTAssertEqual(acc.state.lastValue, 41)
+    }
+
     func testGapDistributesEvenlyAcrossSpannedDays() {
         var acc = UsageAccumulator(calendar: cal)
         acc.apply(utilization: 40, resetAt: weeklyReset, now: at(2026, 6, 24, 12))
