@@ -59,6 +59,7 @@ struct MenuContentView: View {
                 HStack {
                     Button("터미널 열기") { openTerminal() }
                     Button("다시 확인") { Task { await service.sync() } }
+                        .disabled(service.isBusy)
                 }
                 .controlSize(.small)
             }
@@ -67,7 +68,9 @@ struct MenuContentView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("동기화 오류").font(.subheadline.weight(.medium)).foregroundStyle(.red)
                 Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                Button("다시 시도") { Task { await service.sync() } }.controlSize(.small)
+                Button("다시 시도") { Task { await service.sync() } }
+                    .disabled(service.isBusy)
+                    .controlSize(.small)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case .ok, .unknown:
@@ -154,6 +157,7 @@ struct MenuContentView: View {
             }
             Spacer()
             Button("지금 동기화") { Task { await service.sync() } }
+                .disabled(service.isBusy)
             Button("종료") { NSApplication.shared.terminate(nil) }
         }
         .controlSize(.small)

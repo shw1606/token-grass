@@ -18,6 +18,10 @@ final class UsageService: ObservableObject {
     @Published private(set) var sevenDayResetsAt: Date?
     @Published private(set) var lastSync: Date?
     @Published private(set) var grid: GrassGrid = DateGrid.makeGrid(usage: [:], weeks: 26)
+    /// True while a sync is in flight AND for a short cooldown afterward — the
+    /// UI disables its sync buttons on this so a human mashing "지금 동기화"
+    /// can't fire a burst of requests into a real rate limit.
+    @Published private(set) var isBusy = false
 
     private var accumulator: UsageAccumulator
     private var timer: Timer?
@@ -95,27 +99,32 @@ final class UsageService: ObservableObject {
     /// installed iPhone/widget gets the current grass immediately.
     private var hasPushedICloud = false
 
-    /// Guards against overlapping sync() calls — the 5-min timer, the wake
-    /// handler, and a manual "다시 시도" tap can all land within moments of each
-    /// other right after the Mac wakes from sleep, which otherwise fires several
-    /// near-simultaneous requests and can trip a rate limit. Tracked with a
-    /// start time (not a plain Bool) so a sync that somehow never completes
-    /// can't wedge every future attempt forever — after `staleLockTimeout` we
-    /// log it and proceed anyway rather than silently freezing the UI.
-    private var syncStartedAt: Date?
+    /// Guards against BOTH true overlap (the 5-min timer, the wake handler, and
+    /// a manual tap landing within moments of each other) AND a human mashing
+    /// "지금 동기화" many times in a row — a real user did exactly that and
+    /// turned it into a cascade of 429s, since each quick request completed
+    /// before the next tap, so a simple "already in flight" guard never
+    /// tripped. `minInterval` enforces a floor between network attempts no
+    /// matter how many times the button is pressed; `staleLockTimeout` is a
+    /// safety net so a sync that somehow never completes can't wedge every
+    /// future attempt forever.
+    private var lastAttemptAt: Date?
+    private let minInterval: TimeInterval = 10
     private let staleLockTimeout: TimeInterval = 45
 
     func sync() async {
-        if let startedAt = syncStartedAt {
-            let elapsed = Date().timeIntervalSince(startedAt)
-            guard elapsed > staleLockTimeout else {
-                SyncLog.log("sync() dropped — another sync in flight (\(Int(elapsed))s)")
+        let now = Date()
+        if isBusy, let last = lastAttemptAt {
+            let elapsed = now.timeIntervalSince(last)
+            if elapsed < staleLockTimeout {
+                SyncLog.log("sync() dropped — busy/cooling down (\(String(format: "%.1f", elapsed))s)")
                 return
             }
             SyncLog.log("⚠️ previous sync stuck for \(Int(elapsed))s — forcing through anyway")
         }
-        syncStartedAt = Date()
-        defer { syncStartedAt = nil }
+        lastAttemptAt = now
+        isBusy = true
+        defer { isBusy = false }
 
         SyncLog.log("sync() start (cachedToken=\(cachedToken != nil))")
         do {
@@ -131,6 +140,12 @@ final class UsageService: ObservableObject {
             connection = .error(Self.friendlyMessage(for: error))
             SyncLog.log("sync() FAILED — \(error)")
         }
+
+        // Keep the button disabled a little past the network round-trip so a
+        // fast success/failure still leaves at least `minInterval` between
+        // attempts — a human mashing the button gets one request, not a burst.
+        let coolMore = minInterval - Date().timeIntervalSince(now)
+        if coolMore > 0 { try? await Task.sleep(nanoseconds: UInt64(coolMore * 1_000_000_000)) }
     }
 
     private func currentToken() async throws -> String {
