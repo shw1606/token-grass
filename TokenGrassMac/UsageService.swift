@@ -41,14 +41,21 @@ final class UsageService: ObservableObject {
         NSUbiquitousKeyValueStore.default.synchronize()
         if let cloud = ICloudGrassStore.read()?.daily { accumulator.mergeDaily(cloud) }
         refreshGrid()
+        SyncLog.log("=== app launch (build \(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?")) ===")
         Task { await sync() }
         // Poll every 5 min while awake (the menu bar shows the % continuously)…
         timer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
+            SyncLog.log("timer fired")
             Task { await self?.sync() }
         }
         // …and catch up on wake from sleep (the timer doesn't fire while asleep).
         // Wait a few seconds first so networking is back up — a poll fired the
         // instant we wake often hits a dead connection and returns an empty 200.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { _ in
+            SyncLog.log("system woke from sleep")
+        }
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -91,23 +98,38 @@ final class UsageService: ObservableObject {
     /// Guards against overlapping sync() calls — the 5-min timer, the wake
     /// handler, and a manual "다시 시도" tap can all land within moments of each
     /// other right after the Mac wakes from sleep, which otherwise fires several
-    /// near-simultaneous requests and can trip a rate limit.
-    private var isSyncing = false
+    /// near-simultaneous requests and can trip a rate limit. Tracked with a
+    /// start time (not a plain Bool) so a sync that somehow never completes
+    /// can't wedge every future attempt forever — after `staleLockTimeout` we
+    /// log it and proceed anyway rather than silently freezing the UI.
+    private var syncStartedAt: Date?
+    private let staleLockTimeout: TimeInterval = 45
 
     func sync() async {
-        guard !isSyncing else { return }
-        isSyncing = true
-        defer { isSyncing = false }
+        if let startedAt = syncStartedAt {
+            let elapsed = Date().timeIntervalSince(startedAt)
+            guard elapsed > staleLockTimeout else {
+                SyncLog.log("sync() dropped — another sync in flight (\(Int(elapsed))s)")
+                return
+            }
+            SyncLog.log("⚠️ previous sync stuck for \(Int(elapsed))s — forcing through anyway")
+        }
+        syncStartedAt = Date()
+        defer { syncStartedAt = nil }
 
+        SyncLog.log("sync() start (cachedToken=\(cachedToken != nil))")
         do {
             let usage = try await fetchUsageRefreshingTokenIfNeeded()
             applyUsage(usage)
             lastSync = Date()
             connection = .ok
+            SyncLog.log("sync() OK 5h=\(usage.fiveHour.utilization) 7d=\(usage.sevenDay.utilization)")
         } catch is KeychainError {
             connection = .notConnected
+            SyncLog.log("sync() FAILED — keychain: not connected")
         } catch {
             connection = .error(Self.friendlyMessage(for: error))
+            SyncLog.log("sync() FAILED — \(error)")
         }
     }
 
@@ -129,6 +151,7 @@ final class UsageService: ObservableObject {
                 return try ClaudeKeychain.accessToken()
             } catch {
                 lastError = error
+                SyncLog.log("keychain read attempt \(attempt + 1)/\(attempts) failed")
                 if attempt < attempts - 1 {
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
                 }
