@@ -77,7 +77,17 @@ final class UsageService: ObservableObject {
     /// installed iPhone/widget gets the current grass immediately.
     private var hasPushedICloud = false
 
+    /// Guards against overlapping sync() calls — the 5-min timer, the wake
+    /// handler, and a manual "다시 시도" tap can all land within moments of each
+    /// other right after the Mac wakes from sleep, which otherwise fires several
+    /// near-simultaneous requests and can trip a rate limit.
+    private var isSyncing = false
+
     func sync() async {
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+
         do {
             let usage = try await fetchUsageRefreshingTokenIfNeeded()
             applyUsage(usage)
@@ -90,22 +100,41 @@ final class UsageService: ObservableObject {
         }
     }
 
-    private func currentToken() throws -> String {
+    private func currentToken() async throws -> String {
         if let cachedToken { return cachedToken }
-        let token = try ClaudeKeychain.accessToken()
+        let token = try await readTokenWithRetry()
         cachedToken = token
         return token
     }
 
+    /// The macOS login Keychain can be briefly locked right after waking from
+    /// sleep, before the user has unlocked their screen — a read attempted in
+    /// that window fails even though Claude Code IS logged in. Retry a few times
+    /// with a short delay before concluding it's genuinely not connected.
+    private func readTokenWithRetry(attempts: Int = 4) async throws -> String {
+        var lastError: Error = KeychainError.notFound
+        for attempt in 0..<attempts {
+            do {
+                return try ClaudeKeychain.accessToken()
+            } catch {
+                lastError = error
+                if attempt < attempts - 1 {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                }
+            }
+        }
+        throw lastError
+    }
+
     private func fetchUsageRefreshingTokenIfNeeded() async throws -> UsageResponse {
         do {
-            return try await fetchUsage(token: try currentToken(), attempts: 3)
+            return try await fetchUsage(token: try await currentToken(), attempts: 3)
         } catch let error as UsageClientError {
             // Token expired (Claude Code rotated it): drop the cache and re-read
             // once. Any other HTTP error propagates.
             if case .http(let code, _) = error, code == 401 || code == 403 {
                 cachedToken = nil
-                return try await fetchUsage(token: try currentToken(), attempts: 2)
+                return try await fetchUsage(token: try await currentToken(), attempts: 2)
             }
             throw error
         }
