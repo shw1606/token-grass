@@ -19,19 +19,29 @@ final class OAuthTests: XCTestCase {
     func testAuthorizeURLHasRequiredParams() {
         let pkce = PKCE(verifier: "v")
         let url = OAuthFlow.authorizeURL(pkce: pkce, state: "st8")
-        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
-        func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
 
-        // Byte-for-byte matching the live `claude auth login --claudeai` URL.
         XCTAssertEqual(url.host, "claude.com")
         XCTAssertEqual(url.path, "/cai/oauth/authorize")
-        XCTAssertEqual(value("client_id"), "9d1c250a-e61b-44d9-88ed-5944d1962f5e")
-        XCTAssertEqual(value("response_type"), "code")
-        XCTAssertEqual(value("redirect_uri"), OAuthConfig.redirectURI)
-        XCTAssertEqual(value("code_challenge_method"), "S256")
-        XCTAssertEqual(value("code_challenge"), pkce.challenge)
-        XCTAssertEqual(value("scope"), "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload")
-        XCTAssertEqual(value("state"), "st8")
+
+        // Assert on the RAW wire query — this is what must match Claude Code
+        // byte-for-byte (redirect_uri/scope fully percent-encoded, spaces as +).
+        let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)!.percentEncodedQuery!
+        XCTAssertTrue(raw.contains("client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e"))
+        XCTAssertTrue(raw.contains("response_type=code"))
+        XCTAssertTrue(raw.contains("redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback"))
+        XCTAssertTrue(raw.contains("scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference+user%3Asessions%3Aclaude_code+user%3Amcp_servers+user%3Afile_upload"))
+        XCTAssertTrue(raw.contains("code_challenge_method=S256"))
+        XCTAssertTrue(raw.contains("code_challenge=\(pkce.challenge)"))
+        XCTAssertTrue(raw.contains("state=st8"))
+    }
+
+    func testFormURLEncodingMatchesURLSearchParams() {
+        XCTAssertEqual(OAuthFlow.formURLEncoded("a b"), "a+b")
+        XCTAssertEqual(OAuthFlow.formURLEncoded("user:profile"), "user%3Aprofile")
+        XCTAssertEqual(
+            OAuthFlow.formURLEncoded("https://x.com/y"),
+            "https%3A%2F%2Fx.com%2Fy"
+        )
     }
 
     func testParsePastedCode() {

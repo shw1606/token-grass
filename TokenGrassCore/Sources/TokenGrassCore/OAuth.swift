@@ -73,19 +73,39 @@ public struct OAuthTokens: Codable, Equatable, Sendable {
 
 public enum OAuthFlow {
     /// Build the authorize URL the app opens in a browser.
+    ///
+    /// The query is encoded to match Claude Code's `URLSearchParams` output
+    /// BYTE-FOR-BYTE (application/x-www-form-urlencoded: space→`+`, everything
+    /// but unreserved+`*-._`→`%XX`, so `:` and `/` in `redirect_uri`/`scope`
+    /// become `%3A`/`%2F`). This matters: the authorize server matches
+    /// `redirect_uri` against its raw registered string, and a swift-default
+    /// URLComponents encoding (literal `:` `/`, space→`%20`) is rejected with
+    /// "Invalid request format" even though it decodes to the same value.
     public static func authorizeURL(pkce: PKCE, state: String) -> URL {
         var components = URLComponents(url: OAuthConfig.authorizeURL, resolvingAgainstBaseURL: false)!
-        components.queryItems = [
-            URLQueryItem(name: "code", value: "true"), // Claude's "show the code" (manual) mode
-            URLQueryItem(name: "client_id", value: OAuthConfig.clientID),
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "redirect_uri", value: OAuthConfig.redirectURI),
-            URLQueryItem(name: "scope", value: OAuthConfig.scopes.joined(separator: " ")),
-            URLQueryItem(name: "code_challenge", value: pkce.challenge),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
-            URLQueryItem(name: "state", value: state),
+        let pairs: [(String, String)] = [
+            ("code", "true"), // Claude's "show the code" (manual) mode
+            ("client_id", OAuthConfig.clientID),
+            ("response_type", "code"),
+            ("redirect_uri", OAuthConfig.redirectURI),
+            ("scope", OAuthConfig.scopes.joined(separator: " ")),
+            ("code_challenge", pkce.challenge),
+            ("code_challenge_method", "S256"),
+            ("state", state),
         ]
+        components.percentEncodedQuery = pairs
+            .map { "\($0.0)=\(formURLEncoded($0.1))" }
+            .joined(separator: "&")
         return components.url!
+    }
+
+    /// application/x-www-form-urlencoded encoding, matching JS `URLSearchParams`.
+    static func formURLEncoded(_ value: String) -> String {
+        var allowed = CharacterSet()
+        allowed.insert(charactersIn:
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789*-._")
+        let encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+        return encoded.replacingOccurrences(of: "%20", with: "+")
     }
 
     /// The callback page shows the code as "code#state"; the user may paste either.
@@ -140,8 +160,8 @@ public enum OAuthFlow {
         )
     }
 
-    /// Random URL-safe state value.
-    public static func randomState() -> String { randomURLSafe(byteCount: 16) }
+    /// Random URL-safe state value (32 bytes → 43 chars, matching the CLI).
+    public static func randomState() -> String { randomURLSafe(byteCount: 32) }
 }
 
 // MARK: - Helpers
