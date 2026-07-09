@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>TokenGrass Mac Companion</title>
+    <link>https://shw1606.github.io/token-grass/appcast.xml</link>
+    <description>Update feed for the TokenGrass Mac companion (Sparkle).</description>
+    <language>en</language>
+    <item>
+      <title>Version 1.2.0</title>
+      <sparkle:releaseNotesLink>https://github.com/shw1606/token-grass/releases/tag/v1.2.0</sparkle:releaseNotesLink>
+      <pubDate>Thu, 09 Jul 2026 06:54:42 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/shw1606/token-grass/releases/download/v1.2.0/TokenGrass.dmg"
+        sparkle:version="15"
+        sparkle:shortVersionString="1.2.0"
+        length="1883018"
+        type="application/octet-stream"
+        sparkle:edSignature="pMTxF6KajDGuYbyoWbvlIHIuGXwKQB3H/8hoXHqj2QLgNonkIXLQnlKbRX9ze+hjf5sLIKrc4wWUaT8k7cHbBw==" />
+    </item>
+<!-- ITEMS -->
+  </channel>
+</rss>

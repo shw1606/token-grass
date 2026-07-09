@@ -38,8 +38,34 @@ gh release create v0.1.0 build/TokenGrass.dmg \
   --notes-file docs/release-notes/v0.1.0.md
 ```
 
-Bump `MARKETING_VERSION` in `project.yml` before tagging. A notarized + stapled
-DMG opens on any Mac without a Gatekeeper warning.
+Bump the Mac target's `MARKETING_VERSION` (and global `CURRENT_PROJECT_VERSION`)
+in `project.yml` before tagging. A notarized + stapled DMG opens on any Mac
+without a Gatekeeper warning.
+
+### Auto-updates (Sparkle)
+
+The Mac companion checks `docs/appcast.xml` (served via GitHub Pages at
+`https://shw1606.github.io/token-grass/appcast.xml`) and can update itself in
+place. After notarizing a new DMG and creating its GitHub Release:
+
+```bash
+# One-time: download Sparkle's CLI tools (not vendored — they're release-signing
+# utilities, not a runtime dependency). Get sign_update from:
+#   https://github.com/sparkle-project/Sparkle/releases → Sparkle-X.Y.Z.tar.xz → bin/sign_update
+# The private EdDSA key lives in this Mac's login Keychain (created once via
+# `generate_keys`, which also printed the SUPublicEDKey now embedded in
+# TokenGrassMac/Info.plist — don't regenerate unless you're prepared to ship a
+# new public key to every existing install).
+
+./scripts/update-appcast.sh build/TokenGrass.dmg <version> <build> \
+  "https://github.com/shw1606/token-grass/releases/tag/v<version>" 14.0
+
+git add docs/appcast.xml
+git commit -m "Release v<version>"
+git push   # GitHub Pages redeploys automatically; existing installs pick it up
+           # on their next check (SUScheduledCheckInterval, ~daily) or via the
+           # menu's "업데이트 확인" button.
+```
 
 ## iOS app + widget (App Store)
 

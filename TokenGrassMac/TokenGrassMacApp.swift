@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Combine
+import Sparkle
 
 @main
 struct TokenGrassMacApp: App {
@@ -18,6 +19,13 @@ struct TokenGrassMacApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let service = UsageService()
+    // startingUpdater: true begins Sparkle's background schedule immediately
+    // (interval set via SUScheduledCheckInterval in Info.plist) — no separate
+    // "start" call needed.
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil
+    )
+    private lazy var updaterViewModel = UpdaterViewModel(updaterController: updaterController)
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var cancellables = Set<AnyCancellable>()
@@ -34,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // fixed contentSize — MenuContentView's width shrinks in calendar mode
         // (small, grid-fit cells), and we want the popover itself to shrink
         // with it rather than leaving empty space.
-        let hosting = NSHostingController(rootView: MenuContentView(service: service))
+        let hosting = NSHostingController(rootView: MenuContentView(service: service, updater: updaterViewModel))
         hosting.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hosting
 
@@ -91,5 +99,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
+    }
+}
+
+/// Thin SwiftUI-facing wrapper around Sparkle's updater, per Sparkle's
+/// documented pattern — exposes just enough for a menu button to trigger a
+/// manual check (background checks run on their own via SUScheduledCheckInterval).
+@MainActor
+final class UpdaterViewModel: ObservableObject {
+    @Published private(set) var canCheckForUpdates = true
+    private let updaterController: SPUStandardUpdaterController
+
+    init(updaterController: SPUStandardUpdaterController) {
+        self.updaterController = updaterController
+        updaterController.updater.publisher(for: \.canCheckForUpdates)
+            .assign(to: &$canCheckForUpdates)
+    }
+
+    func checkForUpdates() {
+        updaterController.checkForUpdates(nil)
     }
 }

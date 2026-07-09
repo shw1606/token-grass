@@ -3,6 +3,7 @@ import TokenGrassCore
 
 struct MenuContentView: View {
     @ObservedObject var service: UsageService
+    @ObservedObject var updater: UpdaterViewModel
     @State private var launchAtLogin = LoginItem.isEnabled
     /// Stable anchor for the countdown's TimelineView (never `.now`, which spins).
     @State private var timelineAnchor = Date()
@@ -26,10 +27,18 @@ struct MenuContentView: View {
     }
 
     private var loginToggle: some View {
-        Toggle("로그인 시 자동 실행", isOn: $launchAtLogin)
-            .toggleStyle(.checkbox)
-            .font(.caption)
-            .onChange(of: launchAtLogin) { _, enabled in LoginItem.setEnabled(enabled) }
+        HStack {
+            Toggle("로그인 시 자동 실행", isOn: $launchAtLogin)
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                .onChange(of: launchAtLogin) { _, enabled in LoginItem.setEnabled(enabled) }
+            Spacer()
+            Button("업데이트 확인") { updater.checkForUpdates() }
+                .disabled(!updater.canCheckForUpdates)
+                .font(.caption)
+                .buttonStyle(.link)
+                .controlSize(.small)
+        }
     }
 
     private var header: some View {

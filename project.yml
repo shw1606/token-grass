@@ -18,7 +18,7 @@ configFiles:
 settings:
   base:
     MARKETING_VERSION: "1.0.0" # iOS app + widget (still at the version submitted for App Store review)
-    CURRENT_PROJECT_VERSION: "14"
+    CURRENT_PROJECT_VERSION: "15"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
@@ -26,6 +26,9 @@ settings:
 packages:
   TokenGrassCore:
     path: TokenGrassCore
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
 
 targets:
   TokenGrass:
@@ -82,10 +85,8 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES # required for Developer ID notarization
         # Mac companion versions independently of the iOS app/widget (its own
-        # GitHub Release, own changelog). 1.1.0: adds the calendar view toggle
-        # (a real feature, semver-minor) plus the accumulated fixes since 1.0.0
-        # (CPU spin, keychain reprompt hardening, rate-limit throttling,
-        # resets_at:null parsing, midnight grid refresh, auth-expiry nudge).
-        MARKETING_VERSION: "1.1.0"
+        # GitHub Release, own changelog). 1.2.0 adds Sparkle auto-updates.
+        MARKETING_VERSION: "1.2.0"
     dependencies:
       - package: TokenGrassCore
+      - package: Sparkle
