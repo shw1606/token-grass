@@ -89,7 +89,7 @@ enum UsageAPI {
 /// OAuth token endpoint (in-app login path). We own these tokens, separate from
 /// Claude Code's, so refreshing here never touches Claude Code's login.
 enum OAuthClient {
-    static func exchange(code: String, verifier: String, state: String?) throws -> OAuthTokens {
+    static func exchange(code: String, verifier: String, state: String) throws -> OAuthTokens {
         let body = OAuthFlow.tokenExchangeBody(code: code, verifier: verifier, state: state)
         return try OAuthFlow.parseTokens(post(body))
     }

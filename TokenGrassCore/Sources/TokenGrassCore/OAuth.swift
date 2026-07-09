@@ -5,11 +5,21 @@ import CryptoKit
 /// Discovered from the Claude Code binary. The redirect is a page that *displays*
 /// the authorization code, so the flow is: open authorize URL → user logs in →
 /// copy the shown code → paste into the app → exchange for tokens.
+///
+/// Authorize lives on claude.ai — the host picks the account context, and only
+/// the claude.ai host grants a *subscription* (Pro/Max) token whose usage the
+/// `/api/oauth/usage` endpoint reports. Authorizing on the console host family
+/// (console.anthropic.com / platform.claude.com) yields a Console-context token
+/// (observed: 1-year expiry, no refresh token, missing the user:profile scope
+/// that usage requires). The token endpoint itself is host-agnostic.
 public enum OAuthConfig {
     public static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-    public static let authorizeURL = URL(string: "https://platform.claude.com/oauth/authorize")!
+    public static let authorizeURL = URL(string: "https://claude.ai/oauth/authorize")!
     public static let tokenURL = URL(string: "https://platform.claude.com/v1/oauth/token")!
     public static let redirectURI = "https://platform.claude.com/oauth/code/callback"
+    /// user:profile is required by /api/oauth/usage (it 403s naming this scope);
+    /// user:inference marks the standard subscription grant. No org:create_api_key —
+    /// this app never mints API keys.
     public static let scopes = ["user:inference", "user:profile"]
 }
 
@@ -73,15 +83,19 @@ public enum OAuthFlow {
     }
 
     /// JSON body for the authorization_code → token exchange.
-    public static func tokenExchangeBody(code: String, verifier: String, state: String?) -> Data {
-        var fields: [String: String] = [
+    /// `state` is REQUIRED: omitting it makes the endpoint answer 400
+    /// "Invalid request format" (verified empirically — this very error is what
+    /// once made this flow look "blocked by Anthropic"). With state present,
+    /// the same request reaches real grant validation.
+    public static func tokenExchangeBody(code: String, verifier: String, state: String) -> Data {
+        let fields: [String: String] = [
             "grant_type": "authorization_code",
             "code": code,
+            "state": state,
             "redirect_uri": OAuthConfig.redirectURI,
             "client_id": OAuthConfig.clientID,
             "code_verifier": verifier,
         ]
-        if let state { fields["state"] = state }
         return (try? JSONSerialization.data(withJSONObject: fields)) ?? Data()
     }
 

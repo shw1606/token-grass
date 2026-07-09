@@ -22,7 +22,10 @@ final class OAuthTests: XCTestCase {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
         func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
 
-        XCTAssertEqual(url.host, "platform.claude.com")
+        // claude.ai, NOT the console host family: the authorize host picks the
+        // account context, and only claude.ai grants a subscription token that
+        // /api/oauth/usage accepts.
+        XCTAssertEqual(url.host, "claude.ai")
         XCTAssertEqual(url.path, "/oauth/authorize")
         XCTAssertEqual(value("client_id"), OAuthConfig.clientID)
         XCTAssertEqual(value("response_type"), "code")

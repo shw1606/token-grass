@@ -1,18 +1,23 @@
 import SwiftUI
 import TokenGrassCore
 
-/// Phase A/B screen: demo grass + stats + home-screen widget previews. This is
-/// what an App Review reviewer sees with no token (DESIGN §5.1, APPSTORE 2.1).
-/// Token connect / sync / disconnect arrive in a later phase.
+/// Home screen. Three data sources, in priority order:
+/// standalone (this phone signed in with Claude) → Mac-synced (iCloud) → demo.
 struct RootView: View {
-    @ObservedObject var sync: ICloudSync
+    @ObservedObject var service: PhoneUsageService
+    @State private var showLogin = false
 
     /// The Mac-download landing page (opened on the Mac, or shared to it).
     private let setupURL = URL(string: "https://shw1606.github.io/token-grass")!
 
-    private var isReal: Bool { sync.snapshot != nil }
-    private var snapshot: UsageSnapshot { sync.snapshot ?? DemoData.snapshot(weeks: 53) }
+    private enum Source { case standalone, macSynced, demo }
+    private var source: Source {
+        if service.isLoggedIn { return .standalone }
+        if service.snapshot != nil { return .macSynced }
+        return .demo
+    }
 
+    private var snapshot: UsageSnapshot { service.snapshot ?? DemoData.snapshot(weeks: 53) }
     private var usage: [String: Int] { snapshot.usageByDay }
     private var yearGrid: GrassGrid { DateGrid.makeGrid(usage: usage, weeks: 53) }
     private var previewGrid: GrassGrid { DateGrid.makeGrid(usage: usage, weeks: 26) }
@@ -22,6 +27,7 @@ struct RootView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     yearCard
+                    if source == .standalone { liveUsageCard }
                     statsRow
                     widgetPreviews
                     statusCard
@@ -29,8 +35,19 @@ struct RootView: View {
                 }
                 .padding()
             }
+            .refreshable { await service.sync(force: true) }
             .navigationTitle("TokenGrass")
         }
+        .sheet(isPresented: $showLogin) {
+            ClaudeLoginView(service: service)
+        }
+        #if DEBUG
+        // UI-test hook: TG_UI=login auto-opens the sign-in sheet (no tap needed
+        // for headless simulator screenshots).
+        .onAppear {
+            if ProcessInfo.processInfo.environment["TG_UI"] == "login" { showLogin = true }
+        }
+        #endif
     }
 
     // MARK: - Year chart
@@ -40,7 +57,7 @@ struct RootView: View {
             HStack {
                 Text("Your grass").font(.headline)
                 Spacer()
-                demoBadge
+                sourceBadge
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 GrassChartView(grid: yearGrid, theme: .claudeOrange, cellSize: 11, spacing: 2.5, showMonthLabels: true, onDark: true)
@@ -50,6 +67,32 @@ struct RootView: View {
         }
         .padding()
         .cardBackground()
+    }
+
+    // MARK: - Live usage (standalone mode)
+
+    private var liveUsageCard: some View {
+        HStack(spacing: 12) {
+            liveTile("5-hour session", service.fiveHour, resetsAt: service.fiveHourResetsAt)
+            liveTile("7-day", service.sevenDay, resetsAt: service.sevenDayResetsAt)
+        }
+    }
+
+    private func liveTile(_ label: String, _ percent: Double, resetsAt: Date?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+            Text("\(Int(percent))%")
+                .font(.title2.weight(.semibold))
+                .monospacedDigit()
+            if let resetsAt {
+                Text("resets \(resetsAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: - Stats
@@ -96,39 +139,13 @@ struct RootView: View {
 
     @ViewBuilder private var statusCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if isReal {
-                Label("Synced from your Mac", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.green)
-                Text("Your grass updates automatically from the TokenGrass app on your Mac, over iCloud. No account, no servers.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                Label("Set it up on your Mac", systemImage: "macbook.and.iphone")
-                    .font(.subheadline.weight(.semibold))
-                Text("TokenGrass collects your usage on the Mac where you use Claude Code, then syncs it here over iCloud. This grass is a demo until then. No account, no servers, nothing sent to anyone.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                // The download lives on the Mac, so give an address to open there
-                // plus a one-tap way to send the link across.
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("On your Mac, open").font(.caption2).foregroundStyle(.secondary)
-                    Text("shw1606.github.io/token-grass")
-                        .font(.footnote.weight(.semibold)).monospaced()
-                        .foregroundStyle(Color(red: 0.91, green: 0.44, blue: 0.13))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.top, 2)
-
-                ShareLink(item: setupURL) {
-                    Label("Send the link to my Mac", systemImage: "square.and.arrow.up")
-                        .font(.footnote.weight(.medium))
-                }
-                .padding(.top, 2)
+            switch source {
+            case .standalone:
+                standaloneStatus
+            case .macSynced:
+                macSyncedStatus
+            case .demo:
+                demoStatus
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,12 +153,118 @@ struct RootView: View {
         .cardBackground()
     }
 
-    private var demoBadge: some View {
-        Text(isReal ? "SYNCED" : "DEMO")
+    @ViewBuilder private var standaloneStatus: some View {
+        if service.needsRelogin {
+            Label("Session expired", systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.orange)
+            Text("Sign in again to keep your grass growing. Your history is safe.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Button("Sign in again") { showLogin = true }
+                .buttonStyle(.borderedProminent)
+                .tint(Color(red: 0.91, green: 0.44, blue: 0.13))
+                .controlSize(.small)
+        } else {
+            Label("Connected to your Claude account", systemImage: "checkmark.circle.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.green)
+            Text("This iPhone reads your usage straight from Anthropic — no Mac needed, no third-party servers. Pull down to refresh.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            if let error = service.lastError {
+                Label(error, systemImage: "wifi.exclamationmark")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+            HStack {
+                if let last = service.lastSync {
+                    Text("Synced \(last.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Sign out") { service.signOut() }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder private var macSyncedStatus: some View {
+        Label("Synced over iCloud", systemImage: "checkmark.circle.fill")
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.green)
+        Text("Your grass stays up to date over iCloud — from the TokenGrass app on your Mac, or from this iPhone's own history. No servers.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        Divider().padding(.vertical, 2)
+        Text("Want this iPhone to update on its own too?")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        Button {
+            showLogin = true
+        } label: {
+            Label("Sign in with Claude", systemImage: "person.crop.circle.badge.checkmark")
+                .font(.footnote.weight(.medium))
+        }
+    }
+
+    @ViewBuilder private var demoStatus: some View {
+        Label("Make it yours", systemImage: "sparkles")
+            .font(.subheadline.weight(.semibold))
+        Text("This grass is a demo. Sign in with your Claude account and this iPhone will track your real usage by itself.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        Button {
+            showLogin = true
+        } label: {
+            Label("Sign in with Claude", systemImage: "person.crop.circle.badge.checkmark")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Color(red: 0.91, green: 0.44, blue: 0.13))
+
+        Divider().padding(.vertical, 2)
+
+        Label("Prefer the Mac companion?", systemImage: "macbook.and.iphone")
+            .font(.footnote.weight(.medium))
+        Text("It reads Claude Code usage on your Mac and syncs here over iCloud — no sign-in at all.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        // The download lives on the Mac, so give an address to open there
+        // plus a one-tap way to send the link across.
+        VStack(alignment: .leading, spacing: 3) {
+            Text("On your Mac, open").font(.caption2).foregroundStyle(.secondary)
+            Text("shw1606.github.io/token-grass")
+                .font(.footnote.weight(.semibold)).monospaced()
+                .foregroundStyle(Color(red: 0.91, green: 0.44, blue: 0.13))
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+
+        ShareLink(item: setupURL) {
+            Label("Send the link to my Mac", systemImage: "square.and.arrow.up")
+                .font(.footnote.weight(.medium))
+        }
+    }
+
+    private var sourceBadge: some View {
+        let (text, color): (String, Color) = {
+            switch source {
+            case .standalone: return ("LIVE", .green)
+            case .macSynced: return ("SYNCED", .green)
+            case .demo: return ("DEMO", .yellow)
+            }
+        }()
+        return Text(text)
             .font(.caption2.bold())
-            .foregroundStyle(isReal ? Color.green : Color.primary)
+            .foregroundStyle(source == .demo ? Color.primary : color)
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background((isReal ? Color.green : Color.yellow).opacity(0.22), in: Capsule())
+            .background(color.opacity(0.22), in: Capsule())
     }
 
     private var disclaimer: some View {
@@ -177,5 +300,5 @@ private extension View {
 }
 
 #Preview {
-    RootView(sync: ICloudSync())
+    RootView(service: PhoneUsageService.shared)
 }

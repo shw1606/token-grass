@@ -37,4 +37,23 @@ public struct AppGroupStore {
     public func clear() {
         defaults.removeObject(forKey: Self.snapshotKey)
     }
+
+    // MARK: - Accumulator state (standalone iPhone mode)
+
+    /// The phone's own `AccumulatorState` lives here too: the app polls, the
+    /// widget only reads the derived snapshot above.
+    public static let accumulatorKey = "accumulator.state.v1"
+
+    public func saveAccumulator(_ state: AccumulatorState) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        defaults.set(try encoder.encode(state), forKey: Self.accumulatorKey)
+    }
+
+    public func loadAccumulator() -> AccumulatorState? {
+        guard let data = defaults.data(forKey: Self.accumulatorKey) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(AccumulatorState.self, from: data)
+    }
 }
