@@ -102,21 +102,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Thin SwiftUI-facing wrapper around Sparkle's updater, per Sparkle's
-/// documented pattern — exposes just enough for a menu button to trigger a
-/// manual check (background checks run on their own via SUScheduledCheckInterval).
+/// Thin SwiftUI-facing wrapper around Sparkle's updater. No manual "check now"
+/// button — updates are silent/automatic (Sparkle surfaces its own alert when
+/// it finds one); the only user-facing control is whether background checks
+/// (every SUScheduledCheckInterval) happen at all. Sparkle persists this
+/// choice itself (SUEnableAutomaticChecks in the app's own defaults).
 @MainActor
 final class UpdaterViewModel: ObservableObject {
-    @Published private(set) var canCheckForUpdates = true
-    private let updaterController: SPUStandardUpdaterController
+    private let updater: SPUUpdater
 
-    init(updaterController: SPUStandardUpdaterController) {
-        self.updaterController = updaterController
-        updaterController.updater.publisher(for: \.canCheckForUpdates)
-            .assign(to: &$canCheckForUpdates)
+    @Published var automaticallyChecksForUpdates: Bool {
+        didSet { updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates }
     }
 
-    func checkForUpdates() {
-        updaterController.checkForUpdates(nil)
+    init(updaterController: SPUStandardUpdaterController) {
+        updater = updaterController.updater
+        automaticallyChecksForUpdates = updater.automaticallyChecksForUpdates
     }
 }

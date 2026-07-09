@@ -27,17 +27,14 @@ struct MenuContentView: View {
     }
 
     private var loginToggle: some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 4) {
             Toggle("로그인 시 자동 실행", isOn: $launchAtLogin)
                 .toggleStyle(.checkbox)
                 .font(.caption)
                 .onChange(of: launchAtLogin) { _, enabled in LoginItem.setEnabled(enabled) }
-            Spacer()
-            Button("업데이트 확인") { updater.checkForUpdates() }
-                .disabled(!updater.canCheckForUpdates)
+            Toggle("자동 업데이트 확인", isOn: $updater.automaticallyChecksForUpdates)
+                .toggleStyle(.checkbox)
                 .font(.caption)
-                .buttonStyle(.link)
-                .controlSize(.small)
         }
     }
 
