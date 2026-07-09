@@ -46,15 +46,14 @@ final class UsageService: ObservableObject {
         if let cloud = ICloudGrassStore.read()?.daily { accumulator.mergeDaily(cloud) }
         refreshGrid()
         SyncLog.log("=== app launch (build \(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?")) ===")
+        // The first sync() call schedules its own recurring timer when it
+        // completes (see scheduleNextPoll) — no separate fixed-interval Timer
+        // needed here.
         Task { await sync() }
-        // Poll every 5 min while awake (the menu bar shows the % continuously)…
-        timer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
-            SyncLog.log("timer fired")
-            Task { await self?.sync() }
-        }
-        // …and catch up on wake from sleep (the timer doesn't fire while asleep).
-        // Wait a few seconds first so networking is back up — a poll fired the
-        // instant we wake often hits a dead connection and returns an empty 200.
+        // Catch up on wake from sleep (the poll timer doesn't fire while
+        // asleep). Wait a few seconds first so networking is back up — a poll
+        // fired the instant we wake often hits a dead connection and returns
+        // an empty 200.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { _ in
@@ -112,6 +111,16 @@ final class UsageService: ObservableObject {
     private let minInterval: TimeInterval = 10
     private let staleLockTimeout: TimeInterval = 45
 
+    /// Consecutive failures drive exponential backoff on the recurring poll
+    /// (see scheduleNextPoll) — a sustained outage (expired session, sustained
+    /// rate limit) must NOT be retried every 5 minutes forever. A real incident
+    /// showed exactly that: repeated 401s escalated into a 429 rate-limit that
+    /// then persisted for 35+ minutes while we kept polling on the fixed
+    /// interval regardless, which likely prolonged it.
+    private var consecutiveFailures = 0
+    private let basePollInterval: TimeInterval = 5 * 60
+    private let maxPollInterval: TimeInterval = 60 * 60
+
     func sync() async {
         let now = Date()
         if isBusy, let last = lastAttemptAt {
@@ -132,20 +141,46 @@ final class UsageService: ObservableObject {
             applyUsage(usage)
             lastSync = Date()
             connection = .ok
+            consecutiveFailures = 0
+            hasNudgedThisOutage = false
             SyncLog.log("sync() OK 5h=\(usage.fiveHour.utilization) 7d=\(usage.sevenDay.utilization)")
         } catch is KeychainError {
             connection = .notConnected
-            SyncLog.log("sync() FAILED — keychain: not connected")
+            consecutiveFailures += 1
+            SyncLog.log("sync() FAILED — keychain: not connected (consecutiveFailures=\(consecutiveFailures))")
         } catch {
             connection = .error(Self.friendlyMessage(for: error))
-            SyncLog.log("sync() FAILED — \(error)")
+            consecutiveFailures += 1
+            SyncLog.log("sync() FAILED — \(error) (consecutiveFailures=\(consecutiveFailures))")
         }
+        // Every sync (whether from the timer, wake, or a manual tap) reschedules
+        // the next automatic poll — a successful manual retry during an outage
+        // immediately restores the normal 5-min cadence instead of waiting out
+        // whatever backoff was already in flight.
+        scheduleNextPoll()
 
         // Keep the button disabled a little past the network round-trip so a
         // fast success/failure still leaves at least `minInterval` between
         // attempts — a human mashing the button gets one request, not a burst.
         let coolMore = minInterval - Date().timeIntervalSince(now)
         if coolMore > 0 { try? await Task.sleep(nanoseconds: UInt64(coolMore * 1_000_000_000)) }
+    }
+
+    private func scheduleNextPoll() {
+        timer?.invalidate()
+        let interval = nextPollInterval()
+        SyncLog.log("next poll in \(Int(interval))s (consecutiveFailures=\(consecutiveFailures))")
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            SyncLog.log("timer fired")
+            Task { @MainActor in await self?.sync() }
+        }
+    }
+
+    private func nextPollInterval() -> TimeInterval {
+        guard consecutiveFailures > 0 else { return basePollInterval }
+        // Doubles each consecutive failure, capped at maxPollInterval.
+        let backoff = basePollInterval * pow(2.0, Double(min(consecutiveFailures, 10)))
+        return min(backoff, maxPollInterval)
     }
 
     private func currentToken() async throws -> String {
@@ -175,6 +210,15 @@ final class UsageService: ObservableObject {
         throw lastError
     }
 
+    /// Whether we've already nudged Claude Code during the current run of
+    /// consecutive auth failures. Reset to false on any successful sync.
+    /// Confirmed in the wild: the nudge (`claude auth status`) doesn't always
+    /// fix a genuinely invalidated session — it can exit 0 without actually
+    /// re-authenticating, in which case repeating it on every failed poll adds
+    /// requests without adding value, and was likely a contributor to that
+    /// outage escalating from repeated 401s into a sustained 429.
+    private var hasNudgedThisOutage = false
+
     private func fetchUsageRefreshingTokenIfNeeded() async throws -> UsageResponse {
         do {
             return try await fetchUsage(token: try await currentToken(), attempts: 3)
@@ -184,8 +228,14 @@ final class UsageService: ObservableObject {
             // Keychain still holds a stale access token. Re-reading it (without
             // nudging anything) would just hand back the SAME stale token — so
             // first give Claude Code a chance to refresh its own credentials
-            // (see ClaudeAuthNudge), then drop our cache and re-read.
+            // (see ClaudeAuthNudge), then drop our cache and re-read. Only once
+            // per outage, though — see hasNudgedThisOutage.
             if case .http(let code, _) = error, code == 401 || code == 403 {
+                guard !hasNudgedThisOutage else {
+                    SyncLog.log("skipping auth nudge — already tried this outage")
+                    throw error
+                }
+                hasNudgedThisOutage = true
                 await ClaudeAuthNudge.refresh()
                 cachedToken = nil
                 return try await fetchUsage(token: try await currentToken(), attempts: 2)
@@ -251,7 +301,7 @@ final class UsageService: ObservableObject {
         if let error = error as? UsageClientError {
             switch error {
             case .http(401, _), .http(403, _):
-                return "인증이 만료된 것 같아요. 터미널에서 claude 를 한 번 실행해 로그인하세요."
+                return "로그인이 만료된 것 같아요. 터미널에서 claude 를 실행해 로그인 상태를 확인하고, 안 되면 로그아웃 후 다시 로그인해 주세요."
             case .http(429, _):
                 return "요청이 많아 잠시 제한됐어요. 곧 자동으로 다시 시도합니다."
             case .http(let code, _):
