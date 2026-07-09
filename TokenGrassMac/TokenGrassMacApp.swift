@@ -30,8 +30,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.target = self
 
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 320, height: 300)
-        popover.contentViewController = NSHostingController(rootView: MenuContentView(service: service))
+        // Let the popover track the SwiftUI content's ideal size instead of a
+        // fixed contentSize — MenuContentView's width shrinks in calendar mode
+        // (small, grid-fit cells), and we want the popover itself to shrink
+        // with it rather than leaving empty space.
+        let hosting = NSHostingController(rootView: MenuContentView(service: service))
+        hosting.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hosting
 
         render()
 

@@ -6,6 +6,11 @@ struct MenuContentView: View {
     @State private var launchAtLogin = LoginItem.isEnabled
     /// Stable anchor for the countdown's TimelineView (never `.now`, which spins).
     @State private var timelineAnchor = Date()
+    @AppStorage("tokengrass.displayMode") private var displayModeRaw = GrassDisplayMode.grass.rawValue
+    private var displayMode: GrassDisplayMode { GrassDisplayMode(rawValue: displayModeRaw) ?? .grass }
+    private var displayModeBinding: Binding<GrassDisplayMode> {
+        Binding(get: { displayMode }, set: { displayModeRaw = $0.rawValue })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -17,7 +22,7 @@ struct MenuContentView: View {
             footer
         }
         .padding(14)
-        .frame(width: 320)
+        .frame(width: displayMode == .calendar && service.hasData ? 220 : 320)
     }
 
     private var loginToggle: some View {
@@ -75,10 +80,27 @@ struct MenuContentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         case .ok, .unknown:
             if service.hasData {
-                PackedGrassView(grid: service.grid, theme: .claudeOrange)
-                    .padding(10)
-                    .frame(height: 130)
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("", selection: displayModeBinding) {
+                        Text("잔디").tag(GrassDisplayMode.grass)
+                        Text("달력").tag(GrassDisplayMode.calendar)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    Group {
+                        switch displayMode {
+                        case .grass:
+                            PackedGrassView(grid: service.grid, theme: .claudeOrange)
+                                .padding(10)
+                                .frame(height: 130)
+                        case .calendar:
+                            MonthCalendarView(grid: service.grid, theme: .claudeOrange)
+                                .frame(height: 240)
+                        }
+                    }
                     .background(GrassTheme.darkSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
             } else {
                 Text("데이터 수집 중… 사용할수록 잔디가 채워집니다 🌱")
                     .font(.caption).foregroundStyle(.secondary)
