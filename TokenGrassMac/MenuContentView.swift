@@ -52,7 +52,7 @@ struct MenuContentView: View {
         let color: Color = {
             switch service.connection {
             case .ok: return .green
-            case .notConnected: return .orange
+            case .notConnected, .authExpired: return .orange
             case .error: return .red
             case .unknown: return .gray
             }
@@ -70,6 +70,18 @@ struct MenuContentView: View {
                 HStack {
                     Button("터미널 열기") { openTerminal() }
                     Button("다시 확인") { Task { await service.sync() } }
+                        .disabled(service.isBusy)
+                }
+                .controlSize(.small)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        case .authExpired(let message):
+            VStack(alignment: .leading, spacing: 6) {
+                Text("로그인 만료").font(.subheadline.weight(.medium)).foregroundStyle(.orange)
+                Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                HStack {
+                    Button("터미널 열기") { openTerminal() }
+                    Button("다시 시도") { Task { await service.sync() } }
                         .disabled(service.isBusy)
                 }
                 .controlSize(.small)

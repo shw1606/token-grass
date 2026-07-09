@@ -9,6 +9,12 @@ import TokenGrassCore
 final class UsageService: ObservableObject {
     enum Connection: Equatable {
         case unknown, notConnected, ok, error(String)
+        /// A 401/403 specifically — distinct from a generic `.error` because
+        /// the fix is different: not "wait and retry" but "log back in".
+        /// `claude auth login` opens a real OAuth browser flow that needs the
+        /// user's own approval, so it can't be triggered silently in the
+        /// background — the UI offers a one-click "터미널 열기" instead.
+        case authExpired(String)
     }
 
     @Published private(set) var connection: Connection = .unknown
@@ -149,7 +155,7 @@ final class UsageService: ObservableObject {
             consecutiveFailures += 1
             SyncLog.log("sync() FAILED — keychain: not connected (consecutiveFailures=\(consecutiveFailures))")
         } catch {
-            connection = .error(Self.friendlyMessage(for: error))
+            connection = Self.connectionState(for: error)
             consecutiveFailures += 1
             SyncLog.log("sync() FAILED — \(error) (consecutiveFailures=\(consecutiveFailures))")
         }
@@ -297,11 +303,20 @@ final class UsageService: ObservableObject {
         throw lastError
     }
 
+    /// 401/403 gets its own `.authExpired` connection state (a distinct fix:
+    /// log back in, not "wait and retry") — everything else is a generic `.error`.
+    private static func connectionState(for error: Error) -> Connection {
+        if let error = error as? UsageClientError, case .http(let code, _) = error, code == 401 || code == 403 {
+            return .authExpired(friendlyMessage(for: error))
+        }
+        return .error(friendlyMessage(for: error))
+    }
+
     private static func friendlyMessage(for error: Error) -> String {
         if let error = error as? UsageClientError {
             switch error {
             case .http(401, _), .http(403, _):
-                return "로그인이 만료된 것 같아요. 터미널에서 claude 를 실행해 로그인 상태를 확인하고, 안 되면 로그아웃 후 다시 로그인해 주세요."
+                return "로그인이 만료됐어요. 터미널에서 claude auth login 을 실행해 다시 로그인하세요."
             case .http(429, _):
                 return "요청이 많아 잠시 제한됐어요. 곧 자동으로 다시 시도합니다."
             case .http(let code, _):

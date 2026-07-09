@@ -18,7 +18,7 @@ configFiles:
 settings:
   base:
     MARKETING_VERSION: "1.0.0" # iOS app + widget (still at the version submitted for App Store review)
-    CURRENT_PROJECT_VERSION: "17"
+    CURRENT_PROJECT_VERSION: "18"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
@@ -86,7 +86,7 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES # required for Developer ID notarization
         # Mac companion versions independently of the iOS app/widget (its own
         # GitHub Release, own changelog). 1.2.0 adds Sparkle auto-updates.
-        MARKETING_VERSION: "1.2.1"
+        MARKETING_VERSION: "1.2.2"
     dependencies:
       - package: TokenGrassCore
       - package: Sparkle
