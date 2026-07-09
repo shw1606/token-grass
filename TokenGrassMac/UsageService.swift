@@ -179,9 +179,14 @@ final class UsageService: ObservableObject {
         do {
             return try await fetchUsage(token: try await currentToken(), attempts: 3)
         } catch let error as UsageClientError {
-            // Token expired (Claude Code rotated it): drop the cache and re-read
-            // once. Any other HTTP error propagates.
+            // A 401/403 usually means the Mac was asleep/off long enough that
+            // nothing ran `claude` to trigger its normal token refresh, so the
+            // Keychain still holds a stale access token. Re-reading it (without
+            // nudging anything) would just hand back the SAME stale token — so
+            // first give Claude Code a chance to refresh its own credentials
+            // (see ClaudeAuthNudge), then drop our cache and re-read.
             if case .http(let code, _) = error, code == 401 || code == 403 {
+                await ClaudeAuthNudge.refresh()
                 cachedToken = nil
                 return try await fetchUsage(token: try await currentToken(), attempts: 2)
             }
