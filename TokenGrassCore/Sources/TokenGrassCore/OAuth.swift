@@ -2,25 +2,38 @@ import Foundation
 import CryptoKit
 
 /// Endpoints + identifiers for the in-app "Sign in with Claude" flow.
-/// Discovered from the Claude Code binary. The redirect is a page that *displays*
-/// the authorization code, so the flow is: open authorize URL → user logs in →
-/// copy the shown code → paste into the app → exchange for tokens.
+/// These MIRROR EXACTLY what the current Claude Code CLI (v2.1.205) sends for a
+/// subscription (`claude /login`) sign-in — extracted from its production config
+/// constants. The redirect is a page that *displays* the authorization code, so
+/// the flow is: open authorize URL → user logs in → copy the shown code → paste
+/// into the app → exchange for tokens.
 ///
-/// Authorize lives on claude.ai — the host picks the account context, and only
-/// the claude.ai host grants a *subscription* (Pro/Max) token whose usage the
-/// `/api/oauth/usage` endpoint reports. Authorizing on the console host family
-/// (console.anthropic.com / platform.claude.com) yields a Console-context token
-/// (observed: 1-year expiry, no refresh token, missing the user:profile scope
-/// that usage requires). The token endpoint itself is host-agnostic.
+/// These are the EXACT values captured from the authorize URL that a live
+/// `claude auth login --claudeai` generates on v2.1.205 (captured via PTY, then
+/// byte-for-byte matched here). Do not "improve" them — every field is what the
+/// working CLI sends.
+///
+/// Why each value matters:
+/// - `authorizeURL`: the subscription login goes through Claude Code's
+///   CLAUDE_AI_AUTHORIZE_URL, which is now `claude.com/cai/oauth/authorize`
+///   (NOT `claude.ai/oauth/authorize` and NOT the console host). Sending the
+///   request to the wrong authorize host is what produced "Invalid request
+///   format" on the consent page.
+/// - `clientID`: still `9d1c250a-…`. (The binary also carries `22422756-…` as a
+///   config constant, but that client is overridden at runtime and the token
+///   endpoint reports it "not found" — `9d1c250a` is the live client.)
+/// - `redirectURI`: the manual "show the code" callback (MANUAL_REDIRECT_URL).
+/// - `scopes`: the exact set/order the CLI requests. `user:profile` is what
+///   `/api/oauth/usage` requires; the rest match the CLI so consent validates.
 public enum OAuthConfig {
     public static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-    public static let authorizeURL = URL(string: "https://claude.ai/oauth/authorize")!
+    public static let authorizeURL = URL(string: "https://claude.com/cai/oauth/authorize")!
     public static let tokenURL = URL(string: "https://platform.claude.com/v1/oauth/token")!
     public static let redirectURI = "https://platform.claude.com/oauth/code/callback"
-    /// user:profile is required by /api/oauth/usage (it 403s naming this scope);
-    /// user:inference marks the standard subscription grant. No org:create_api_key —
-    /// this app never mints API keys.
-    public static let scopes = ["user:inference", "user:profile"]
+    public static let scopes = [
+        "org:create_api_key", "user:profile", "user:inference",
+        "user:sessions:claude_code", "user:mcp_servers", "user:file_upload",
+    ]
 }
 
 /// PKCE pair (RFC 7636). `challenge` = base64url(SHA256(verifier)).
