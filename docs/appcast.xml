@@ -8,15 +8,15 @@
     <item>
       <title>Version 1.2.0</title>
       <sparkle:releaseNotesLink>https://github.com/shw1606/token-grass/releases/tag/v1.2.0</sparkle:releaseNotesLink>
-      <pubDate>Thu, 09 Jul 2026 06:54:42 +0000</pubDate>
+      <pubDate>Thu, 09 Jul 2026 07:56:55 +0000</pubDate>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <enclosure
         url="https://github.com/shw1606/token-grass/releases/download/v1.2.0/TokenGrass.dmg"
-        sparkle:version="15"
+        sparkle:version="16"
         sparkle:shortVersionString="1.2.0"
-        length="1883018"
+        length="1879206"
         type="application/octet-stream"
-        sparkle:edSignature="pMTxF6KajDGuYbyoWbvlIHIuGXwKQB3H/8hoXHqj2QLgNonkIXLQnlKbRX9ze+hjf5sLIKrc4wWUaT8k7cHbBw==" />
+        sparkle:edSignature="fd9kumNveNDHvSNtgW9wVPo2GGYJ4RNKTuzwa5fsSagOg9ax+R1YeLykXxiJmXpNh+6x9/55+7CLtfN6GfSHDA==" />
     </item>
 <!-- ITEMS -->
   </channel>
