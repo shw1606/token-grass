@@ -44,6 +44,19 @@
         type="application/octet-stream"
         sparkle:edSignature="tkyaMzDDsnbmVN/ts+muMR/yjt8lHC3po+cI2+WxfBDHQTO/Vhkk/0/shnHGazil+wqYoTj4SzDgGB7Tx+2JCw==" />
     </item>
+    <item>
+      <title>Version 1.2.3</title>
+      <sparkle:releaseNotesLink>https://github.com/shw1606/token-grass/releases/tag/v1.2.3</sparkle:releaseNotesLink>
+      <pubDate>Fri, 10 Jul 2026 06:05:37 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/shw1606/token-grass/releases/download/v1.2.3/TokenGrass.dmg"
+        sparkle:version="19"
+        sparkle:shortVersionString="1.2.3"
+        length="1910819"
+        type="application/octet-stream"
+        sparkle:edSignature="r1BLRLvoAIhbVTn6hBabYbOYYy0J1JYMfV7vOOD++btW6/4IEMMGeUgw4XImngplCTd3TsziBL+FaCKB5SixBQ==" />
+    </item>
 <!-- ITEMS -->
   </channel>
 </rss>
