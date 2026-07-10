@@ -55,6 +55,9 @@ final class UsageService: ObservableObject {
         // The first sync() call schedules its own recurring timer when it
         // completes (see scheduleNextPoll) — no separate fixed-interval Timer
         // needed here.
+        #if DEBUG
+        seedFakeStaleTokenIfAsked()
+        #endif
         Task { await sync() }
         // Catch up on wake from sleep (the poll timer doesn't fire while
         // asleep). Wait a few seconds first so networking is back up — a poll
@@ -100,6 +103,7 @@ final class UsageService: ObservableObject {
     /// what made the prompt recur. We read once, then only re-read when the token
     /// goes stale (a 401).
     private var cachedToken: String?
+    private var cachedTokenExpiresAt: Date?
     /// Push to iCloud once per launch even if nothing changed, so a freshly
     /// installed iPhone/widget gets the current grass immediately.
     private var hasPushedICloud = false
@@ -189,22 +193,60 @@ final class UsageService: ObservableObject {
         return min(backoff, maxPollInterval)
     }
 
+    /// The cached access token, re-read from the Keychain once it expires.
+    /// Claude Code refreshes its own token and rewrites the Keychain item, so an
+    /// expired cache usually means a fresh token is already sitting there — much
+    /// cheaper to notice via `expiresAt` than by spending a 401 on it.
     private func currentToken() async throws -> String {
-        if let cachedToken { return cachedToken }
-        let token = try await readTokenWithRetry()
-        cachedToken = token
-        return token
+        if let cachedToken, let expiry = cachedTokenExpiresAt,
+           !ClaudeCredentials(accessToken: cachedToken, expiresAt: expiry).isExpired() {
+            return cachedToken
+        }
+        if cachedToken != nil {
+            SyncLog.log("cached token expired — re-reading keychain")
+        }
+        let creds = try await readCredentialsWithRetry()
+        cachedToken = creds.accessToken
+        cachedTokenExpiresAt = creds.expiresAt
+        SyncLog.log("keychain token read (expires \(creds.expiresAt.map(Self.logFormatter.string(from:)) ?? "unknown"))")
+        return creds.accessToken
     }
+
+    private func invalidateCachedToken() {
+        cachedToken = nil
+        cachedTokenExpiresAt = nil
+    }
+
+    private static let logFormatter = ISO8601DateFormatter()
+
+    #if DEBUG
+    /// Test hook: `TG_FAKE_STALE_TOKEN=1` seeds the cache with a dead token that
+    /// still *looks* unexpired, so a launch exercises the real 401-recovery path
+    /// (re-read the Keychain, notice a different token, retry). Guards the bug
+    /// where a 401 threw without ever dropping the cache, pinning the app to a
+    /// dead token until relaunch.
+    /// `=2` additionally pretends we already nudged this outage — the exact state
+    /// the real bug needed: a 401 arriving when `hasNudgedThisOutage` was already
+    /// true used to throw without re-reading the Keychain.
+    func seedFakeStaleTokenIfAsked() {
+        let mode = ProcessInfo.processInfo.environment["TG_FAKE_STALE_TOKEN"]
+        guard mode == "1" || mode == "2" else { return }
+        cachedToken = "sk-ant-oat01-deliberately-invalid-token-for-testing"
+        cachedTokenExpiresAt = Date().addingTimeInterval(3600)
+        if mode == "2" { hasNudgedThisOutage = true }
+        SyncLog.log("TEST: seeded a fake stale token (alreadyNudged=\(mode == "2"))")
+    }
+    #endif
 
     /// The macOS login Keychain can be briefly locked right after waking from
     /// sleep, before the user has unlocked their screen — a read attempted in
     /// that window fails even though Claude Code IS logged in. Retry a few times
     /// with a short delay before concluding it's genuinely not connected.
-    private func readTokenWithRetry(attempts: Int = 4) async throws -> String {
+    private func readCredentialsWithRetry(attempts: Int = 4) async throws -> ClaudeCredentials {
         var lastError: Error = KeychainError.notFound
         for attempt in 0..<attempts {
             do {
-                return try ClaudeKeychain.accessToken()
+                return try ClaudeKeychain.credentials()
             } catch {
                 lastError = error
                 SyncLog.log("keychain read attempt \(attempt + 1)/\(attempts) failed")
@@ -231,22 +273,34 @@ final class UsageService: ObservableObject {
         } catch let error as UsageClientError {
             // A 401/403 usually means the Mac was asleep/off long enough that
             // nothing ran `claude` to trigger its normal token refresh, so the
-            // Keychain still holds a stale access token. Re-reading it (without
-            // nudging anything) would just hand back the SAME stale token — so
-            // first give Claude Code a chance to refresh its own credentials
-            // (see ClaudeAuthNudge), then drop our cache and re-read. Only once
-            // per outage, though — see hasNudgedThisOutage.
-            if case .http(let code, _) = error, code == 401 || code == 403 {
-                guard !hasNudgedThisOutage else {
-                    SyncLog.log("skipping auth nudge — already tried this outage")
-                    throw error
-                }
+            // Keychain still holds a stale access token.
+            guard case .http(let code, _) = error, code == 401 || code == 403 else { throw error }
+
+            let staleToken = cachedToken
+            invalidateCachedToken()
+
+            // Nudging Claude Code to refresh its own credentials is worth ONE try
+            // per outage: `claude auth status` can exit 0 without actually
+            // re-authenticating, so repeating it every poll adds requests without
+            // adding value (it helped escalate one outage into a sustained 429).
+            if !hasNudgedThisOutage {
                 hasNudgedThisOutage = true
                 await ClaudeAuthNudge.refresh()
-                cachedToken = nil
-                return try await fetchUsage(token: try await currentToken(), attempts: 2)
+            } else {
+                SyncLog.log("skipping auth nudge — already tried this outage")
             }
-            throw error
+
+            // Always re-read the Keychain, nudge or not: the user may have run
+            // `claude auth login` themselves since the last poll, in which case a
+            // valid token is sitting right there. (Skipping this read is what once
+            // pinned the app to a dead token until it was relaunched.)
+            let token = try await currentToken()
+            guard token != staleToken else {
+                SyncLog.log("keychain token unchanged after \(code) — still signed out")
+                throw error
+            }
+            SyncLog.log("keychain has a new token after \(code) — retrying")
+            return try await fetchUsage(token: token, attempts: 2)
         }
     }
 
