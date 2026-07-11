@@ -7,6 +7,10 @@ struct MenuContentView: View {
     @State private var launchAtLogin = LoginItem.isEnabled
     /// Stable anchor for the countdown's TimelineView (never `.now`, which spins).
     @State private var timelineAnchor = Date()
+    @State private var showingLogin = false
+    @State private var pastedCode = ""
+    @State private var loginError: String?
+    @State private var isConnecting = false
     @AppStorage("tokengrass.displayMode") private var displayModeRaw = GrassDisplayMode.grass.rawValue
     private var displayMode: GrassDisplayMode { GrassDisplayMode(rawValue: displayModeRaw) ?? .grass }
     private var displayModeBinding: Binding<GrassDisplayMode> {
@@ -18,12 +22,102 @@ struct MenuContentView: View {
             header
             grassSection
             stats
+            accountSection
             loginToggle
             Divider()
             footer
         }
         .padding(14)
         .frame(width: displayMode == .calendar && service.hasData ? 220 : 320)
+    }
+
+    // MARK: - Account (standalone login)
+
+    @ViewBuilder private var accountSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if service.isStandalone {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green).font(.caption)
+                    Text("내 Claude 계정으로 로그인됨").font(.caption)
+                    Spacer()
+                    Button("로그아웃") { service.signOutStandalone() }
+                        .buttonStyle(.link).controlSize(.small)
+                }
+                Text("이 앱이 사용량을 직접 갱신해요. Claude Code를 켜두지 않아도 만료되지 않습니다.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else if showingLogin {
+                loginCard
+            } else {
+                Button { beginLogin() } label: {
+                    Label("내 Claude 계정으로 직접 로그인", systemImage: "person.crop.circle.badge.checkmark")
+                        .font(.caption)
+                }
+                .controlSize(.small)
+                Text("지금은 Claude Code 로그인에 얹혀 있어요. 직접 로그인하면 앱이 스스로 토큰을 갱신해 “로그인 만료”가 사라집니다.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            if let loginError {
+                Text(loginError).font(.caption2).foregroundStyle(.red).lineLimit(3)
+            }
+        }
+    }
+
+    private var loginCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("1) 브라우저에서 승인 후 표시되는 코드를 복사하세요.")
+                .font(.caption2).foregroundStyle(.secondary)
+            Button("승인 페이지 다시 열기") { openAuthorize() }
+                .controlSize(.small)
+            Text("2) 코드 붙여넣기").font(.caption2).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                TextField("code#state", text: $pastedCode)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption.monospaced())
+                if isConnecting {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button("연결") { connect() }
+                        .controlSize(.small)
+                        .disabled(pastedCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            Button("취소") { cancelLogin() }
+                .buttonStyle(.link).controlSize(.small)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func beginLogin() {
+        openAuthorize()
+        showingLogin = true
+        loginError = nil
+    }
+
+    private func openAuthorize() {
+        NSWorkspace.shared.open(service.beginStandaloneLogin())
+    }
+
+    private func cancelLogin() {
+        showingLogin = false
+        pastedCode = ""
+        loginError = nil
+    }
+
+    private func connect() {
+        isConnecting = true
+        loginError = nil
+        Task {
+            do {
+                try await service.completeStandaloneLogin(pastedCode: pastedCode)
+                showingLogin = false
+                pastedCode = ""
+            } catch {
+                loginError = "연결 실패 — 코드는 한 번만 쓸 수 있어요. ‘승인 페이지 다시 열기’로 새 코드를 받아 다시 붙여넣어 주세요."
+            }
+            isConnecting = false
+        }
     }
 
     private var loginToggle: some View {
@@ -80,7 +174,11 @@ struct MenuContentView: View {
                 Text("로그인 만료").font(.subheadline.weight(.medium)).foregroundStyle(.orange)
                 Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
                 HStack {
-                    Button("터미널 열기") { openTerminal() }
+                    if service.isStandalone {
+                        Button("다시 로그인") { beginLogin() }
+                    } else {
+                        Button("터미널 열기") { openTerminal() }
+                    }
                     Button("다시 시도") { Task { await service.sync() } }
                         .disabled(service.isBusy)
                 }
