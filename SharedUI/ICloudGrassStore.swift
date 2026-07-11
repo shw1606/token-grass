@@ -19,4 +19,12 @@ public enum ICloudGrassStore {
         guard let data = NSUbiquitousKeyValueStore.default.data(forKey: key) else { return nil }
         return GrassPayload.decode(data)
     }
+
+    /// Remove the synced grass entirely (a full reset). Affects every device
+    /// that shares this iCloud account.
+    public static func clear() {
+        let store = NSUbiquitousKeyValueStore.default
+        store.removeObject(forKey: key)
+        store.synchronize()
+    }
 }

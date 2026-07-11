@@ -64,22 +64,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appearanceObservation = statusItem.button?.observe(\.effectiveAppearance) { [weak self] _, _ in
             DispatchQueue.main.async { self?.render() }
         }
+
+        // …and when the menu-bar display options change in Settings. render()
+        // dedups by key, so most notifications are cheap no-ops.
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.render() }
+
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TG_RENDER_SAMPLES"] == "1" { renderLabelSamples() }
+        #endif
     }
+
+    #if DEBUG
+    private func renderLabelSamples() {
+        service.debugSeedUsage(fiveHour: 42, sevenDay: 18)
+        let combos: [(Bool, Bool, String)] = [
+            (true, true, "grass+both"), (true, false, "grass+5h"),
+            (false, true, "nogr+both"), (false, false, "nogr+5h"),
+        ]
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            for (g, w, name) in combos {
+                let r = ImageRenderer(content:
+                    MenuBarLabel(service: self.service, showGrass: g, showWeekly: w)
+                        .environment(\.colorScheme, .light)
+                        .padding(6).background(Color.white)
+                )
+                r.scale = 6
+                if let cg = r.cgImage,
+                   let data = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) {
+                    try? data.write(to: URL(fileURLWithPath: "/tmp/tg-label-\(name).png"))
+                    SyncLog.log("TEST render \(name): OK \(cg.width)x\(cg.height)")
+                } else {
+                    SyncLog.log("TEST render \(name): FAILED (nil cgImage)")
+                }
+            }
+        }
+    }
+    #endif
 
     private func render() {
         guard let button = statusItem.button else { return }
         let isDark = button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let defaults = UserDefaults.standard
+        // Default true when unset: object(forKey:) is nil → showGrass/showWeekly true.
+        let showGrass = defaults.object(forKey: "tokengrass.menubar.showGrass") as? Bool ?? true
+        let showWeekly = defaults.object(forKey: "tokengrass.menubar.showWeekly") as? Bool ?? true
 
         // Only rebuild the image when what it shows actually changes. Crucial: the
         // last line sets `button.image`, which itself re-notifies `effectiveAppearance`
         // — without this guard the appearance observer would re-enter render() forever
         // and peg a CPU core at 100%.
-        let key = "\(isDark)|\(Int(service.fiveHour.rounded()))|\(Int(service.sevenDay.rounded()))|\(service.lastSync != nil)"
+        let key = "\(isDark)|\(Int(service.fiveHour.rounded()))|\(Int(service.sevenDay.rounded()))|\(service.lastSync != nil)|\(showGrass)|\(showWeekly)"
         guard key != lastRenderKey else { return }
         lastRenderKey = key
 
         let renderer = ImageRenderer(content:
-            MenuBarLabel(service: service)
+            MenuBarLabel(service: service, showGrass: showGrass, showWeekly: showWeekly)
                 .environment(\.colorScheme, isDark ? .dark : .light)
         )
         renderer.scale = NSScreen.main?.backingScaleFactor ?? 2

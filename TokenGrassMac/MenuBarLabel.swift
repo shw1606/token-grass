@@ -1,20 +1,30 @@
 import SwiftUI
 
-/// The status-bar item itself: a grass tuft that fills with the 5-hour
-/// utilization, and the 5h / 7d percentages stacked to its right.
+/// The status-bar item itself: an optional grass tuft that fills with the
+/// 5-hour utilization, plus the 5h (and optionally 7d) percentages. When the
+/// weekly percentage is hidden, the 5-hour number is shown larger on its own.
 struct MenuBarLabel: View {
     @ObservedObject var service: UsageService
+    var showGrass: Bool = true
+    var showWeekly: Bool = true
 
     private var available: Bool { service.lastSync != nil }
 
     var body: some View {
         HStack(spacing: 4) {
-            GrassGauge(fill: service.fiveHour / 100)
-                .frame(width: 18, height: 20)
-            VStack(alignment: .trailing, spacing: -3) {
-                number(service.fiveHour, size: 13, weight: .bold)         // 5-hour session (top, prominent)
-                number(service.sevenDay, size: 10, weight: .medium)      // 7-day weekly (bottom, subdued)
-                    .foregroundStyle(.secondary)
+            if showGrass {
+                GrassGauge(fill: service.fiveHour / 100)
+                    .frame(width: 18, height: 20)
+            }
+            if showWeekly {
+                VStack(alignment: .trailing, spacing: -3) {
+                    number(service.fiveHour, size: 13, weight: .bold)     // 5-hour session (top, prominent)
+                    number(service.sevenDay, size: 10, weight: .medium)   // 7-day weekly (bottom, subdued)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                // Weekly hidden → give the 5-hour number the full height.
+                number(service.fiveHour, size: 16, weight: .bold)
             }
         }
         .padding(.horizontal, 1)

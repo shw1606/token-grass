@@ -209,6 +209,26 @@ final class UsageService: ObservableObject {
         Task { await sync() }
     }
 
+    /// Danger Zone: erase everything this Mac stores — the recorded grass
+    /// history (local + iCloud), and the account token (sign out). The iCloud
+    /// wipe is shared, so it clears the grass on other devices too.
+    func wipeAllData() {
+        MacTokenStore.clear()
+        accumulator = UsageAccumulator(state: AccumulatorState(), calendar: .grass())
+        MacStateStore.save(AccumulatorState())
+        ICloudGrassStore.clear()
+        hasPushedICloud = false
+        fiveHour = 0
+        sevenDay = 0
+        fiveHourResetsAt = nil
+        sevenDayResetsAt = nil
+        lastSync = nil
+        consecutiveFailures = 0
+        refreshGrid()
+        connection = .notConnected
+        SyncLog.log("⚠️ wiped all data + signed out")
+    }
+
     private func scheduleNextPoll() {
         timer?.invalidate()
         let interval = nextPollInterval()
@@ -262,6 +282,13 @@ final class UsageService: ObservableObject {
     private static let logFormatter = ISO8601DateFormatter()
 
     #if DEBUG
+    /// Populate published usage so a headless render shows real numbers.
+    func debugSeedUsage(fiveHour: Double, sevenDay: Double) {
+        self.fiveHour = fiveHour
+        self.sevenDay = sevenDay
+        self.lastSync = Date()
+    }
+
     /// `TG_STANDALONE_TEST=deadrefresh` seeds a standalone token with an already-
     /// expired access token and a bogus refresh token, then removes it after the
     /// run. Proves the standalone branch is taken, self-refresh is attempted, a
