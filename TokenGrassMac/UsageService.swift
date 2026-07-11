@@ -3,17 +3,19 @@ import SwiftUI
 import AppKit
 import TokenGrassCore
 
-/// Reads the Claude Code keychain token, polls usage, accumulates daily
-/// intensity, and publishes the grass + status to the UI.
+/// Not signed in with the app's own account yet — no token to poll with.
+struct NotSignedIn: Error {}
+/// The app's own refresh token is dead; the user must sign in again.
+struct StandaloneAuthExpired: Error {}
+
+/// Signs in with the user's own Claude account, self-refreshes its token,
+/// polls usage, accumulates daily intensity, and publishes the grass + status.
 @MainActor
 final class UsageService: ObservableObject {
     enum Connection: Equatable {
         case unknown, notConnected, ok, error(String)
-        /// A 401/403 specifically — distinct from a generic `.error` because
-        /// the fix is different: not "wait and retry" but "log back in".
-        /// `claude auth login` opens a real OAuth browser flow that needs the
-        /// user's own approval, so it can't be triggered silently in the
-        /// background — the UI offers a one-click "터미널 열기" instead.
+        /// The token/refresh is dead — the fix is "sign in again", not "wait and
+        /// retry". The UI offers an in-app re-login (Settings → 계정).
         case authExpired(String)
     }
 
@@ -56,7 +58,6 @@ final class UsageService: ObservableObject {
         // completes (see scheduleNextPoll) — no separate fixed-interval Timer
         // needed here.
         #if DEBUG
-        seedFakeStaleTokenIfAsked()
         seedFakeStandaloneTokenIfAsked()
         #endif
         Task { await sync() }
@@ -99,12 +100,6 @@ final class UsageService: ObservableObject {
 
     var hasData: Bool { !accumulator.state.daily.isEmpty }
 
-    /// Cached so we don't hit the Keychain on every poll — reading Claude Code's
-    /// item can pop a macOS permission prompt, and doing it every 5 minutes is
-    /// what made the prompt recur. We read once, then only re-read when the token
-    /// goes stale (a 401).
-    private var cachedToken: String?
-    private var cachedTokenExpiresAt: Date?
     /// Push to iCloud once per launch even if nothing changed, so a freshly
     /// installed iPhone/widget gets the current grass immediately.
     private var hasPushedICloud = false
@@ -146,19 +141,17 @@ final class UsageService: ObservableObject {
         isBusy = true
         defer { isBusy = false }
 
-        SyncLog.log("sync() start (cachedToken=\(cachedToken != nil))")
+        SyncLog.log("sync() start (signedIn=\(isStandalone))")
         do {
             let usage = try await fetchUsageRefreshingTokenIfNeeded()
             applyUsage(usage)
             lastSync = Date()
             connection = .ok
             consecutiveFailures = 0
-            hasNudgedThisOutage = false
             SyncLog.log("sync() OK 5h=\(usage.fiveHour.utilization) 7d=\(usage.sevenDay.utilization)")
-        } catch is KeychainError {
+        } catch is NotSignedIn {
             connection = .notConnected
-            consecutiveFailures += 1
-            SyncLog.log("sync() FAILED — keychain: not connected (consecutiveFailures=\(consecutiveFailures))")
+            SyncLog.log("sync() — not signed in")
         } catch {
             connection = Self.connectionState(for: error)
             consecutiveFailures += 1
@@ -204,15 +197,15 @@ final class UsageService: ObservableObject {
         try MacTokenStore.save(tokens)
         pendingLogin = nil
         consecutiveFailures = 0
-        hasNudgedThisOutage = false
         SyncLog.log("standalone login OK (expires \(Self.logFormatter.string(from: tokens.expiresAt)))")
         await sync()
     }
 
-    /// Drop the standalone tokens; the app falls back to piggybacking Claude Code.
+    /// Drop the standalone tokens; the app goes back to a signed-out state.
     func signOutStandalone() {
         MacTokenStore.clear()
-        SyncLog.log("standalone signed out — back to piggyback")
+        SyncLog.log("standalone signed out")
+        connection = .notConnected
         Task { await sync() }
     }
 
@@ -233,41 +226,15 @@ final class UsageService: ObservableObject {
         return min(backoff, maxPollInterval)
     }
 
-    /// Whether the app is signed in with its own account (standalone) vs riding
-    /// on Claude Code's keychain (piggyback). Standalone is self-refreshing;
-    /// piggyback depends on Claude Code keeping its token fresh.
+    /// Whether the user has signed in with their own account.
     var isStandalone: Bool { MacTokenStore.load() != nil }
 
-    /// A valid access token, by whichever path applies.
-    ///
-    /// - Standalone: use the app's own token; when it's expired, refresh it
-    ///   ourselves (rotating our own refresh token — never Claude Code's) and
-    ///   persist the rotated pair. This is what keeps the app alive across long
-    ///   idle periods without Claude Code ever running.
-    /// - Piggyback: read Claude Code's keychain token. We never refresh it —
-    ///   doing so would rotate Claude Code's refresh token and break the CLI —
-    ///   so we just re-read once it expires (Claude Code refreshes it) and cache
-    ///   by expiry to avoid spending a 401 on a known-stale token.
+    /// A valid access token from the app's own login. When expired, refresh it
+    /// (rotating our own refresh token) and persist the rotated pair — this is
+    /// what keeps the app alive across long idle periods with no Claude Code
+    /// running. Throws `NotSignedIn` when there's no token yet.
     private func currentToken() async throws -> String {
-        if let tokens = MacTokenStore.load() {
-            return try await standaloneAccessToken(tokens)
-        }
-        if let cachedToken, let expiry = cachedTokenExpiresAt,
-           !ClaudeCredentials(accessToken: cachedToken, expiresAt: expiry).isExpired() {
-            return cachedToken
-        }
-        if cachedToken != nil {
-            SyncLog.log("cached token expired — re-reading keychain")
-        }
-        let creds = try await readCredentialsWithRetry()
-        cachedToken = creds.accessToken
-        cachedTokenExpiresAt = creds.expiresAt
-        SyncLog.log("keychain token read (expires \(creds.expiresAt.map(Self.logFormatter.string(from:)) ?? "unknown"))")
-        return creds.accessToken
-    }
-
-    /// Standalone token, refreshing (and rotating) ahead of expiry.
-    private func standaloneAccessToken(_ tokens: OAuthTokens) async throws -> String {
+        guard let tokens = MacTokenStore.load() else { throw NotSignedIn() }
         guard tokens.isExpired() else { return tokens.accessToken }
         return try await refreshStandalone(tokens)
     }
@@ -276,41 +243,25 @@ final class UsageService: ObservableObject {
     /// ROTATES the refresh token, so the returned one must be saved or the next
     /// refresh fails — `ClaudeNet.refresh` + `MacTokenStore.save` do exactly that.
     /// Each rotation also resets the ~29-day refresh window, so as long as the
-    /// app refreshes within that window it stays signed in indefinitely.
+    /// app refreshes within that window it stays signed in indefinitely. A dead
+    /// refresh token surfaces as `StandaloneAuthExpired` → the UI asks for re-login.
     @discardableResult
     private func refreshStandalone(_ tokens: OAuthTokens) async throws -> String {
         SyncLog.log("standalone token expired — refreshing")
-        let fresh = try await ClaudeNet.refresh(refreshToken: tokens.refreshToken)
-        try MacTokenStore.save(fresh)
-        SyncLog.log("standalone refresh OK (new expiry \(Self.logFormatter.string(from: fresh.expiresAt)))")
-        return fresh.accessToken
-    }
-
-    private func invalidateCachedToken() {
-        cachedToken = nil
-        cachedTokenExpiresAt = nil
+        do {
+            let fresh = try await ClaudeNet.refresh(refreshToken: tokens.refreshToken)
+            try MacTokenStore.save(fresh)
+            SyncLog.log("standalone refresh OK (new expiry \(Self.logFormatter.string(from: fresh.expiresAt)))")
+            return fresh.accessToken
+        } catch {
+            SyncLog.log("standalone refresh failed: \(error) — re-login needed")
+            throw StandaloneAuthExpired()
+        }
     }
 
     private static let logFormatter = ISO8601DateFormatter()
 
     #if DEBUG
-    /// Test hook: `TG_FAKE_STALE_TOKEN=1` seeds the cache with a dead token that
-    /// still *looks* unexpired, so a launch exercises the real 401-recovery path
-    /// (re-read the Keychain, notice a different token, retry). Guards the bug
-    /// where a 401 threw without ever dropping the cache, pinning the app to a
-    /// dead token until relaunch.
-    /// `=2` additionally pretends we already nudged this outage — the exact state
-    /// the real bug needed: a 401 arriving when `hasNudgedThisOutage` was already
-    /// true used to throw without re-reading the Keychain.
-    func seedFakeStaleTokenIfAsked() {
-        let mode = ProcessInfo.processInfo.environment["TG_FAKE_STALE_TOKEN"]
-        guard mode == "1" || mode == "2" else { return }
-        cachedToken = "sk-ant-oat01-deliberately-invalid-token-for-testing"
-        cachedTokenExpiresAt = Date().addingTimeInterval(3600)
-        if mode == "2" { hasNudgedThisOutage = true }
-        SyncLog.log("TEST: seeded a fake stale token (alreadyNudged=\(mode == "2"))")
-    }
-
     /// `TG_STANDALONE_TEST=deadrefresh` seeds a standalone token with an already-
     /// expired access token and a bogus refresh token, then removes it after the
     /// run. Proves the standalone branch is taken, self-refresh is attempted, a
@@ -330,83 +281,17 @@ final class UsageService: ObservableObject {
     }
     #endif
 
-    /// The macOS login Keychain can be briefly locked right after waking from
-    /// sleep, before the user has unlocked their screen — a read attempted in
-    /// that window fails even though Claude Code IS logged in. Retry a few times
-    /// with a short delay before concluding it's genuinely not connected.
-    private func readCredentialsWithRetry(attempts: Int = 4) async throws -> ClaudeCredentials {
-        var lastError: Error = KeychainError.notFound
-        for attempt in 0..<attempts {
-            do {
-                return try ClaudeKeychain.credentials()
-            } catch {
-                lastError = error
-                SyncLog.log("keychain read attempt \(attempt + 1)/\(attempts) failed")
-                if attempt < attempts - 1 {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
-                }
-            }
-        }
-        throw lastError
-    }
-
-    /// Whether we've already nudged Claude Code during the current run of
-    /// consecutive auth failures. Reset to false on any successful sync.
-    /// Confirmed in the wild: the nudge (`claude auth status`) doesn't always
-    /// fix a genuinely invalidated session — it can exit 0 without actually
-    /// re-authenticating, in which case repeating it on every failed poll adds
-    /// requests without adding value, and was likely a contributor to that
-    /// outage escalating from repeated 401s into a sustained 429.
-    private var hasNudgedThisOutage = false
-
     private func fetchUsageRefreshingTokenIfNeeded() async throws -> UsageResponse {
         do {
             return try await fetchUsage(token: try await currentToken(), attempts: 3)
         } catch let error as UsageClientError {
             guard case .http(let code, _) = error, code == 401 || code == 403 else { throw error }
-
-            // Standalone: our access token was rejected (revoked, or a rare race
-            // where Claude Code refreshed the shared account elsewhere). Force a
-            // refresh with our own refresh token and retry once. If the refresh
-            // itself fails, our refresh token is genuinely dead → re-login needed.
-            if let tokens = MacTokenStore.load() {
-                do {
-                    let token = try await refreshStandalone(tokens)
-                    SyncLog.log("standalone refresh after \(code) — retrying")
-                    return try await fetchUsage(token: token, attempts: 2)
-                } catch {
-                    SyncLog.log("standalone refresh failed after \(code): \(error) — re-login needed")
-                    throw error
-                }
-            }
-
-            // Piggyback: a 401/403 usually means the Mac was asleep/off long
-            // enough that nothing ran `claude` to refresh, so the Keychain still
-            // holds a stale access token.
-            let staleToken = cachedToken
-            invalidateCachedToken()
-
-            // Nudging Claude Code to refresh its own credentials is worth ONE try
-            // per outage: `claude auth status` can exit 0 without actually
-            // re-authenticating, so repeating it every poll adds requests without
-            // adding value (it helped escalate one outage into a sustained 429).
-            if !hasNudgedThisOutage {
-                hasNudgedThisOutage = true
-                await ClaudeAuthNudge.refresh()
-            } else {
-                SyncLog.log("skipping auth nudge — already tried this outage")
-            }
-
-            // Always re-read the Keychain, nudge or not: the user may have run
-            // `claude auth login` themselves since the last poll, in which case a
-            // valid token is sitting right there. (Skipping this read is what once
-            // pinned the app to a dead token until it was relaunched.)
-            let token = try await currentToken()
-            guard token != staleToken else {
-                SyncLog.log("keychain token unchanged after \(code) — still signed out")
-                throw error
-            }
-            SyncLog.log("keychain has a new token after \(code) — retrying")
+            // Our access token was rejected (revoked, or a race where the account
+            // refreshed elsewhere). Force a refresh with our own refresh token and
+            // retry once; a dead refresh token surfaces as StandaloneAuthExpired.
+            guard let tokens = MacTokenStore.load() else { throw error }
+            let token = try await refreshStandalone(tokens)
+            SyncLog.log("standalone refresh after \(code) — retrying")
             return try await fetchUsage(token: token, attempts: 2)
         }
     }
@@ -464,9 +349,12 @@ final class UsageService: ObservableObject {
         throw lastError
     }
 
-    /// 401/403 gets its own `.authExpired` connection state (a distinct fix:
-    /// log back in, not "wait and retry") — everything else is a generic `.error`.
+    /// A dead token/refresh gets its own `.authExpired` state (fix: sign in
+    /// again, not "wait and retry") — everything else is a generic `.error`.
     private static func connectionState(for error: Error) -> Connection {
+        if error is StandaloneAuthExpired {
+            return .authExpired("로그인이 만료됐어요. 설정에서 다시 로그인해 주세요.")
+        }
         if let error = error as? UsageClientError, case .http(let code, _) = error, code == 401 || code == 403 {
             return .authExpired(friendlyMessage(for: error))
         }
@@ -477,10 +365,7 @@ final class UsageService: ObservableObject {
         if let error = error as? UsageClientError {
             switch error {
             case .http(401, _), .http(403, _):
-                // Standalone users re-login in-app; piggyback users must run the CLI.
-                return MacTokenStore.load() != nil
-                    ? "로그인이 만료됐어요. 아래 ‘다시 로그인’을 눌러 주세요."
-                    : "로그인이 만료됐어요. 터미널에서 claude auth login 을 실행해 다시 로그인하세요."
+                return "로그인이 만료됐어요. 설정에서 다시 로그인해 주세요."
             case .http(429, _):
                 return "요청이 많아 잠시 제한됐어요. 곧 자동으로 다시 시도합니다."
             case .http(let code, _):

@@ -2,6 +2,8 @@ import Foundation
 import Security
 import TokenGrassCore
 
+enum KeychainError: Error { case notFound }
+
 /// The Mac app's OWN OAuth tokens, in its own Keychain item — completely
 /// separate from Claude Code's `Claude Code-credentials`. This is what makes
 /// the app self-sufficient: it holds its own refresh token and rotates it

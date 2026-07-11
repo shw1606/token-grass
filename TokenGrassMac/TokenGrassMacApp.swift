@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var updaterViewModel = UpdaterViewModel(updaterController: updaterController)
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
+    private var settingsWindow: NSWindow?
     private var cancellables = Set<AnyCancellable>()
     private var appearanceObservation: NSKeyValueObservation?
     private var lastRenderKey = ""
@@ -42,7 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // fixed contentSize — MenuContentView's width shrinks in calendar mode
         // (small, grid-fit cells), and we want the popover itself to shrink
         // with it rather than leaving empty space.
-        let hosting = NSHostingController(rootView: MenuContentView(service: service, updater: updaterViewModel))
+        let hosting = NSHostingController(
+            rootView: MenuContentView(service: service, onOpenSettings: { [weak self] in self?.showSettings() })
+        )
         hosting.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hosting
 
@@ -88,6 +91,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         image.isTemplate = false // preserve the orange gauge
         button.image = image
+    }
+
+    /// Open (or focus) the Settings window. A menu-bar-only app has no window by
+    /// default, so we own an NSWindow hosting SettingsView and bring it forward.
+    func showSettings() {
+        popover.performClose(nil)
+        if settingsWindow == nil {
+            let hosting = NSHostingController(
+                rootView: SettingsView(service: service, updater: updaterViewModel)
+            )
+            let window = NSWindow(contentViewController: hosting)
+            window.title = "TokenGrass 설정"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            settingsWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func togglePopover() {

@@ -1,135 +1,29 @@
 import SwiftUI
 import TokenGrassCore
 
+/// The menu-bar popover: status + the grass/calendar visualization + live
+/// stats. All settings (login, display mode, options) live in the separate
+/// Settings window, reachable via the gear button.
 struct MenuContentView: View {
     @ObservedObject var service: UsageService
-    @ObservedObject var updater: UpdaterViewModel
-    @State private var launchAtLogin = LoginItem.isEnabled
+    /// Opens the app's Settings window (owned by AppDelegate).
+    var onOpenSettings: () -> Void
+
     /// Stable anchor for the countdown's TimelineView (never `.now`, which spins).
     @State private var timelineAnchor = Date()
-    @State private var showingLogin = false
-    @State private var pastedCode = ""
-    @State private var loginError: String?
-    @State private var isConnecting = false
     @AppStorage("tokengrass.displayMode") private var displayModeRaw = GrassDisplayMode.grass.rawValue
     private var displayMode: GrassDisplayMode { GrassDisplayMode(rawValue: displayModeRaw) ?? .grass }
-    private var displayModeBinding: Binding<GrassDisplayMode> {
-        Binding(get: { displayMode }, set: { displayModeRaw = $0.rawValue })
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             grassSection
             stats
-            accountSection
-            loginToggle
             Divider()
             footer
         }
         .padding(14)
         .frame(width: displayMode == .calendar && service.hasData ? 220 : 320)
-    }
-
-    // MARK: - Account (standalone login)
-
-    @ViewBuilder private var accountSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if service.isStandalone {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green).font(.caption)
-                    Text("내 Claude 계정으로 로그인됨").font(.caption)
-                    Spacer()
-                    Button("로그아웃") { service.signOutStandalone() }
-                        .buttonStyle(.link).controlSize(.small)
-                }
-                Text("이 앱이 사용량을 직접 갱신해요. Claude Code를 켜두지 않아도 만료되지 않습니다.")
-                    .font(.caption2).foregroundStyle(.secondary)
-            } else if showingLogin {
-                loginCard
-            } else {
-                Button { beginLogin() } label: {
-                    Label("내 Claude 계정으로 직접 로그인", systemImage: "person.crop.circle.badge.checkmark")
-                        .font(.caption)
-                }
-                .controlSize(.small)
-                Text("지금은 Claude Code 로그인에 얹혀 있어요. 직접 로그인하면 앱이 스스로 토큰을 갱신해 “로그인 만료”가 사라집니다.")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-            if let loginError {
-                Text(loginError).font(.caption2).foregroundStyle(.red).lineLimit(3)
-            }
-        }
-    }
-
-    private var loginCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("1) 브라우저에서 승인 후 표시되는 코드를 복사하세요.")
-                .font(.caption2).foregroundStyle(.secondary)
-            Button("승인 페이지 다시 열기") { openAuthorize() }
-                .controlSize(.small)
-            Text("2) 코드 붙여넣기").font(.caption2).foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                TextField("code#state", text: $pastedCode)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.caption.monospaced())
-                if isConnecting {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button("연결") { connect() }
-                        .controlSize(.small)
-                        .disabled(pastedCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            Button("취소") { cancelLogin() }
-                .buttonStyle(.link).controlSize(.small)
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    private func beginLogin() {
-        openAuthorize()
-        showingLogin = true
-        loginError = nil
-    }
-
-    private func openAuthorize() {
-        NSWorkspace.shared.open(service.beginStandaloneLogin())
-    }
-
-    private func cancelLogin() {
-        showingLogin = false
-        pastedCode = ""
-        loginError = nil
-    }
-
-    private func connect() {
-        isConnecting = true
-        loginError = nil
-        Task {
-            do {
-                try await service.completeStandaloneLogin(pastedCode: pastedCode)
-                showingLogin = false
-                pastedCode = ""
-            } catch {
-                loginError = "연결 실패 — 코드는 한 번만 쓸 수 있어요. ‘승인 페이지 다시 열기’로 새 코드를 받아 다시 붙여넣어 주세요."
-            }
-            isConnecting = false
-        }
-    }
-
-    private var loginToggle: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Toggle("로그인 시 자동 실행", isOn: $launchAtLogin)
-                .toggleStyle(.checkbox)
-                .font(.caption)
-                .onChange(of: launchAtLogin) { _, enabled in LoginItem.setEnabled(enabled) }
-            Toggle("자동 업데이트 확인", isOn: $updater.automaticallyChecksForUpdates)
-                .toggleStyle(.checkbox)
-                .font(.caption)
-        }
     }
 
     private var header: some View {
@@ -157,66 +51,40 @@ struct MenuContentView: View {
     @ViewBuilder private var grassSection: some View {
         switch service.connection {
         case .notConnected:
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Claude Code 로그인이 필요합니다").font(.subheadline.weight(.medium))
-                Text("Mac에서 Claude Code에 로그인돼 있어야 사용량을 읽습니다. 터미널에서 `claude` 를 한 번 실행해 로그인하세요.")
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack {
-                    Button("터미널 열기") { openTerminal() }
-                    Button("다시 확인") { Task { await service.sync() } }
-                        .disabled(service.isBusy)
-                }
-                .controlSize(.small)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            promptCard(
+                title: "로그인이 필요합니다",
+                titleColor: .orange,
+                message: "설정에서 Claude 계정으로 로그인하면 사용량이 채워집니다.",
+                primary: ("설정 열기", onOpenSettings)
+            )
         case .authExpired(let message):
-            VStack(alignment: .leading, spacing: 6) {
-                Text("로그인 만료").font(.subheadline.weight(.medium)).foregroundStyle(.orange)
-                Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                HStack {
-                    if service.isStandalone {
-                        Button("다시 로그인") { beginLogin() }
-                    } else {
-                        Button("터미널 열기") { openTerminal() }
-                    }
-                    Button("다시 시도") { Task { await service.sync() } }
-                        .disabled(service.isBusy)
-                }
-                .controlSize(.small)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            promptCard(
+                title: "로그인 만료",
+                titleColor: .orange,
+                message: message,
+                primary: ("설정 열기", onOpenSettings)
+            )
         case .error(let message):
-            VStack(alignment: .leading, spacing: 6) {
-                Text("동기화 오류").font(.subheadline.weight(.medium)).foregroundStyle(.red)
-                Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                Button("다시 시도") { Task { await service.sync() } }
-                    .disabled(service.isBusy)
-                    .controlSize(.small)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            promptCard(
+                title: "동기화 오류",
+                titleColor: .red,
+                message: message,
+                primary: ("다시 시도", { Task { await service.sync() } })
+            )
         case .ok, .unknown:
             if service.hasData {
-                VStack(alignment: .leading, spacing: 6) {
-                    Picker("", selection: displayModeBinding) {
-                        Text("잔디").tag(GrassDisplayMode.grass)
-                        Text("달력").tag(GrassDisplayMode.calendar)
+                Group {
+                    switch displayMode {
+                    case .grass:
+                        PackedGrassView(grid: service.grid, theme: .claudeOrange)
+                            .padding(10)
+                            .frame(height: 130)
+                    case .calendar:
+                        MonthCalendarView(grid: service.grid, theme: .claudeOrange)
+                            .frame(height: 240)
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-
-                    Group {
-                        switch displayMode {
-                        case .grass:
-                            PackedGrassView(grid: service.grid, theme: .claudeOrange)
-                                .padding(10)
-                                .frame(height: 130)
-                        case .calendar:
-                            MonthCalendarView(grid: service.grid, theme: .claudeOrange)
-                                .frame(height: 240)
-                        }
-                    }
-                    .background(GrassTheme.darkSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
+                .background(GrassTheme.darkSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
                 Text("데이터 수집 중… 사용할수록 잔디가 채워집니다 🌱")
                     .font(.caption).foregroundStyle(.secondary)
@@ -225,17 +93,29 @@ struct MenuContentView: View {
         }
     }
 
-    private func openTerminal() {
-        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
+    private func promptCard(
+        title: String, titleColor: Color, message: String,
+        primary: (label: String, action: () -> Void)
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(titleColor)
+            Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+            HStack {
+                Button(primary.label, action: primary.action)
+                Button("다시 시도") { Task { await service.sync() } }
+                    .disabled(service.isBusy)
+            }
+            .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var stats: some View {
         HStack(alignment: .top) {
             statTile("5시간 세션", service.fiveHour) {
-                // Live countdown — 5-hour window is close, so relative reads best.
-                // Anchor the schedule to a FIXED date: `.now` is re-evaluated every
-                // render, which keeps invalidating the schedule and spins the CPU
-                // at 100%. A stable @State anchor ticks every 30s as intended.
+                // Live countdown — anchor the schedule to a FIXED date; `.now` is
+                // re-evaluated every render, which keeps invalidating the schedule
+                // and spins the CPU at 100%.
                 if let resetsAt = service.fiveHourResetsAt {
                     TimelineView(.periodic(from: timelineAnchor, by: 30)) { context in
                         resetLabel(countdownCaption(resetsAt, now: context.date))
@@ -244,7 +124,6 @@ struct MenuContentView: View {
             }
             Spacer()
             statTile("7일", service.sevenDay) {
-                // Absolute time — the weekly reset is days out, so a clock time is clearer.
                 if let resetsAt = service.sevenDayResetsAt {
                     resetLabel("\(Self.resetFormatter.string(from: resetsAt)) 리셋")
                 }
@@ -294,7 +173,9 @@ struct MenuContentView: View {
                 Text("동기화 안 됨").font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("지금 동기화") { Task { await service.sync() } }
+            Button { onOpenSettings() } label: { Image(systemName: "gearshape") }
+                .help("설정")
+            Button("동기화") { Task { await service.sync() } }
                 .disabled(service.isBusy)
             Button("종료") { NSApplication.shared.terminate(nil) }
         }
