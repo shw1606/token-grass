@@ -187,11 +187,24 @@ final class PhoneUsageService: ObservableObject {
         pushToICloud()
     }
 
-    /// Fold in the Mac companion's iCloud payload (max per day — see
-    /// `UsageAccumulator.mergeDaily`).
+    private var lastHonoredReset: Date? {
+        get {
+            let t = UserDefaults.standard.double(forKey: "tokengrass.lastHonoredResetAt")
+            return t > 0 ? Date(timeIntervalSince1970: t) : nil
+        }
+        set { UserDefaults.standard.set(newValue?.timeIntervalSince1970 ?? 0, forKey: "tokengrass.lastHonoredResetAt") }
+    }
+
+    /// Reconcile with iCloud: honor a wipe done on another device (clear local
+    /// first), then fold in any non-stale grass (max per day — see
+    /// `UsageAccumulator.mergeDaily` and `ICloudGrassStore.resolve`).
     private func mergeICloud() {
-        guard let payload = ICloudGrassStore.read() else { return }
-        accumulator.mergeDaily(payload.daily)
+        let r = ICloudGrassStore.resolve(lastHonoredReset: lastHonoredReset)
+        if r.clearLocal {
+            accumulator = UsageAccumulator(state: AccumulatorState())
+            lastHonoredReset = r.honoredReset
+        }
+        if let daily = r.mergeDaily { accumulator.mergeDaily(daily) }
     }
 
     /// Persist + hand the derived snapshot to the UI and the widget.

@@ -51,7 +51,7 @@ final class UsageService: ObservableObject {
         // existing grass instead of starting blank. Merge keeps the larger value
         // per day, so a reinstall never loses what's already recorded.
         NSUbiquitousKeyValueStore.default.synchronize()
-        if let cloud = ICloudGrassStore.read()?.daily { accumulator.mergeDaily(cloud) }
+        honorAndMergeICloud()
         refreshGrid()
         SyncLog.log("=== app launch (build \(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?")) ===")
         // The first sync() call schedules its own recurring timer when it
@@ -88,14 +88,34 @@ final class UsageService: ObservableObject {
         }
     }
 
-    /// Merge grass that arrived from iCloud (e.g. after a fresh install) into the
-    /// local accumulator, so history is restored rather than overwritten.
+    private var lastHonoredReset: Date? {
+        get {
+            let t = UserDefaults.standard.double(forKey: "tokengrass.lastHonoredResetAt")
+            return t > 0 ? Date(timeIntervalSince1970: t) : nil
+        }
+        set { UserDefaults.standard.set(newValue?.timeIntervalSince1970 ?? 0, forKey: "tokengrass.lastHonoredResetAt") }
+    }
+
+    /// Reconcile with iCloud: honor a newer wipe (clear local first), then merge
+    /// any non-stale grass. Runs at launch and whenever iCloud changes, so a wipe
+    /// on another device propagates instead of being re-merged back.
     private func restoreFromICloud() {
-        guard let cloud = ICloudGrassStore.read()?.daily, !cloud.isEmpty else { return }
-        if accumulator.mergeDaily(cloud) {
+        let before = accumulator.state.daily
+        honorAndMergeICloud()
+        if accumulator.state.daily != before {
             MacStateStore.save(accumulator.state)
             refreshGrid()
         }
+    }
+
+    private func honorAndMergeICloud() {
+        let r = ICloudGrassStore.resolve(lastHonoredReset: lastHonoredReset)
+        if r.clearLocal {
+            accumulator = UsageAccumulator(state: AccumulatorState(), calendar: .grass())
+            lastHonoredReset = r.honoredReset
+            SyncLog.log("honored a remote wipe — cleared local grass")
+        }
+        if let daily = r.mergeDaily { accumulator.mergeDaily(daily) }
     }
 
     var hasData: Bool { !accumulator.state.daily.isEmpty }
@@ -210,13 +230,16 @@ final class UsageService: ObservableObject {
     }
 
     /// Danger Zone: erase everything this Mac stores — the recorded grass
-    /// history (local + iCloud), and the account token (sign out). The iCloud
-    /// wipe is shared, so it clears the grass on other devices too.
+    /// history (local + iCloud), and the account token (sign out). Writes an
+    /// iCloud reset tombstone so the wipe propagates to other devices instead of
+    /// being resurrected by their max-merge re-push (see ICloudGrassStore.resolve).
     func wipeAllData() {
+        let now = Date()
         MacTokenStore.clear()
         accumulator = UsageAccumulator(state: AccumulatorState(), calendar: .grass())
         MacStateStore.save(AccumulatorState())
-        ICloudGrassStore.clear()
+        ICloudGrassStore.clear(resetAt: now)
+        lastHonoredReset = now // don't re-honor our own wipe
         hasPushedICloud = false
         fiveHour = 0
         sevenDay = 0
