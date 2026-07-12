@@ -296,9 +296,17 @@ final class UsageService: ObservableObject {
             try MacTokenStore.save(fresh)
             SyncLog.log("standalone refresh OK (new expiry \(Self.logFormatter.string(from: fresh.expiresAt)))")
             return fresh.accessToken
-        } catch {
-            SyncLog.log("standalone refresh failed: \(error) — re-login needed")
+        } catch let error as ClaudeNetError where error.status == 400 || error.status == 401 || error.status == 403 {
+            // The SERVER rejected the refresh token (invalid_grant / unauthorized)
+            // → genuinely expired, re-login needed.
+            SyncLog.log("standalone refresh rejected (\(error)) — re-login needed")
             throw StandaloneAuthExpired()
+        } catch {
+            // Network/offline/timeout/5xx/429 — the token is fine, we just
+            // couldn't reach the server. Surface as a transient error (retried
+            // with backoff), NOT a bogus "log in again".
+            SyncLog.log("standalone refresh transient failure: \(error)")
+            throw error
         }
     }
 

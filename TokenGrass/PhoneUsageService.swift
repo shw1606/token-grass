@@ -161,9 +161,17 @@ final class PhoneUsageService: ObservableObject {
         guard let tokens = ClaudeTokenStore.load(), !tokens.refreshToken.isEmpty else {
             throw ClaudeNetError.http(status: 401, body: "no refresh token")
         }
-        let fresh = try await ClaudeNet.refresh(refreshToken: tokens.refreshToken)
-        try ClaudeTokenStore.save(fresh)
-        return fresh.accessToken
+        do {
+            let fresh = try await ClaudeNet.refresh(refreshToken: tokens.refreshToken)
+            try ClaudeTokenStore.save(fresh)
+            return fresh.accessToken
+        } catch let error as ClaudeNetError where error.status == 400 || error.status == 401 || error.status == 403 {
+            // Server actually rejected the refresh token → expired. Normalize to
+            // 401 so sync()'s auth branch prompts re-login. Network/other errors
+            // propagate unchanged and are shown as a connection problem, not a
+            // bogus "sign in again".
+            throw ClaudeNetError.http(status: 401, body: "refresh rejected")
+        }
     }
 
     // MARK: - Data plumbing
