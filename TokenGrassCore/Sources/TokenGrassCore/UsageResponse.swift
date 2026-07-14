@@ -40,27 +40,92 @@ extension UsageWindow: Decodable {
     }
 }
 
-/// The subset of `/api/oauth/usage` we use. Extra keys (limits, spend,
-/// extra_usage, …) are ignored — loose parsing so schema drift degrades gracefully.
-public struct UsageResponse: Decodable, Sendable {
+/// A per-model weekly limit (e.g. Fable's own weekly tally), reported in the
+/// endpoint's `limits` array as a `weekly_scoped` entry. `modelName` is the
+/// human label ("Fable", "Opus", …); parsing it generically means the tile
+/// tracks whichever model the plan scopes, not a hard-coded one.
+public struct ScopedWeekly: Equatable, Sendable {
+    public let modelName: String
+    public let utilization: Double
+    public let resetsAt: Date?
+
+    public init(modelName: String, utilization: Double, resetsAt: Date?) {
+        self.modelName = modelName
+        self.utilization = utilization
+        self.resetsAt = resetsAt
+    }
+}
+
+/// The subset of `/api/oauth/usage` we use. Extra keys (spend, extra_usage, …)
+/// are ignored — loose parsing so schema drift degrades gracefully.
+public struct UsageResponse: Sendable {
     public let fiveHour: UsageWindow
     public let sevenDay: UsageWindow
     public let sevenDaySonnet: UsageWindow?
+    /// Per-model weekly (from `limits[].weekly_scoped`), e.g. Fable.
+    public let scopedWeekly: ScopedWeekly?
 
-    private enum CodingKeys: String, CodingKey {
-        case fiveHour = "five_hour"
-        case sevenDay = "seven_day"
-        case sevenDaySonnet = "seven_day_sonnet"
-    }
-
-    public init(fiveHour: UsageWindow, sevenDay: UsageWindow, sevenDaySonnet: UsageWindow? = nil) {
+    public init(
+        fiveHour: UsageWindow, sevenDay: UsageWindow,
+        sevenDaySonnet: UsageWindow? = nil, scopedWeekly: ScopedWeekly? = nil
+    ) {
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
         self.sevenDaySonnet = sevenDaySonnet
+        self.scopedWeekly = scopedWeekly
     }
 
     public static func parse(_ data: Data) throws -> UsageResponse {
         try JSONDecoder().decode(UsageResponse.self, from: data)
+    }
+}
+
+extension UsageResponse: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case fiveHour = "five_hour"
+        case sevenDay = "seven_day"
+        case sevenDaySonnet = "seven_day_sonnet"
+        case limits
+    }
+
+    /// One entry of the endpoint's `limits` array.
+    private struct Limit: Decodable {
+        let kind: String?
+        let percent: Double?
+        let resetsAt: String?
+        let isActive: Bool?
+        let scope: Scope?
+
+        struct Scope: Decodable {
+            let model: Model?
+            struct Model: Decodable {
+                let displayName: String?
+                enum CodingKeys: String, CodingKey { case displayName = "display_name" }
+            }
+        }
+        enum CodingKeys: String, CodingKey {
+            case kind, percent, isActive = "is_active", scope
+            case resetsAt = "resets_at"
+        }
+        var modelName: String? { scope?.model?.displayName }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        fiveHour = try c.decode(UsageWindow.self, forKey: .fiveHour)
+        sevenDay = try c.decode(UsageWindow.self, forKey: .sevenDay)
+        sevenDaySonnet = try c.decodeIfPresent(UsageWindow.self, forKey: .sevenDaySonnet)
+        let limits = (try? c.decodeIfPresent([Limit].self, forKey: .limits)) ?? nil
+        scopedWeekly = Self.scopedWeekly(from: limits)
+    }
+
+    private static func scopedWeekly(from limits: [Limit]?) -> ScopedWeekly? {
+        guard let limits else { return nil }
+        let scoped = limits.filter { $0.kind == "weekly_scoped" && $0.modelName != nil }
+        // Prefer the active scoped limit; fall back to the first with a model.
+        guard let l = scoped.first(where: { $0.isActive == true }) ?? scoped.first,
+              let name = l.modelName, let percent = l.percent else { return nil }
+        return ScopedWeekly(modelName: name, utilization: percent, resetsAt: l.resetsAt.flatMap(ISO8601.flexible))
     }
 }
 

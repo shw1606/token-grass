@@ -111,7 +111,7 @@ struct MenuContentView: View {
     }
 
     private var stats: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 10) {
             statTile("5시간 세션", service.fiveHour) {
                 // Live countdown — anchor the schedule to a FIXED date; `.now` is
                 // re-evaluated every render, which keeps invalidating the schedule
@@ -122,10 +122,19 @@ struct MenuContentView: View {
                     }
                 }
             }
-            Spacer()
+            Spacer(minLength: 0)
             statTile("7일", service.sevenDay) {
                 if let resetsAt = service.sevenDayResetsAt {
                     resetLabel("\(Self.resetFormatter.string(from: resetsAt)) 리셋")
+                }
+            }
+            // Per-model weekly (e.g. Fable) — only when the plan scopes one.
+            if let model = service.scopedWeeklyModel {
+                Spacer(minLength: 0)
+                statTile("\(model) 주간", service.scopedWeekly) {
+                    if let resetsAt = service.scopedWeeklyResetsAt {
+                        resetLabel("\(Self.resetFormatter.string(from: resetsAt)) 리셋")
+                    }
                 }
             }
         }

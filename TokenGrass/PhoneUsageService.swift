@@ -21,6 +21,10 @@ final class PhoneUsageService: ObservableObject {
     @Published private(set) var sevenDay: Double = 0
     @Published private(set) var fiveHourResetsAt: Date?
     @Published private(set) var sevenDayResetsAt: Date?
+    /// Per-model weekly (e.g. Fable), shown alongside the overall 7-day.
+    @Published private(set) var scopedWeekly: Double = 0
+    @Published private(set) var scopedWeeklyModel: String?
+    @Published private(set) var scopedWeeklyResetsAt: Date?
     @Published private(set) var lastSync: Date?
     @Published private(set) var isBusy = false
     @Published private(set) var lastError: String?
@@ -182,6 +186,9 @@ final class PhoneUsageService: ObservableObject {
         sevenDay = usage.sevenDay.utilization
         fiveHourResetsAt = usage.fiveHour.resetsAt
         sevenDayResetsAt = usage.sevenDay.resetsAt
+        scopedWeekly = usage.scopedWeekly?.utilization ?? 0
+        scopedWeeklyModel = usage.scopedWeekly?.modelName
+        scopedWeeklyResetsAt = usage.scopedWeekly?.resetsAt
         lastSync = now
 
         accumulator.apply(

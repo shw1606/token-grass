@@ -75,6 +75,10 @@ struct RootView: View {
         HStack(spacing: 12) {
             liveTile("5-hour session", service.fiveHour, resetsAt: service.fiveHourResetsAt)
             liveTile("7-day", service.sevenDay, resetsAt: service.sevenDayResetsAt)
+            // Per-model weekly (e.g. Fable) — only when the plan scopes one.
+            if let model = service.scopedWeeklyModel {
+                liveTile("\(model) weekly", service.scopedWeekly, resetsAt: service.scopedWeeklyResetsAt)
+            }
         }
     }
 

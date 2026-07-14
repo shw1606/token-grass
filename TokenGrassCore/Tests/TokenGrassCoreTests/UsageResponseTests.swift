@@ -49,6 +49,48 @@ final class UsageResponseTests: XCTestCase {
         XCTAssertEqual(response.fiveHour.utilization, 1)
     }
 
+    func testParsesScopedWeeklyFromLimits() throws {
+        // Real shape: per-model weekly lives in `limits` as weekly_scoped, not a
+        // `seven_day_<model>` field (those are null now).
+        let json = """
+        {"five_hour":{"utilization":2.0,"resets_at":"2026-07-14T07:59:59.543688+00:00"},
+         "seven_day":{"utilization":48.0,"resets_at":"2026-07-15T15:59:59.543708+00:00"},
+         "seven_day_sonnet":null,
+         "limits":[
+           {"kind":"session","group":"session","percent":2,"is_active":false,"resets_at":"2026-07-14T07:59:59.543688+00:00","scope":null},
+           {"kind":"weekly_all","group":"weekly","percent":48,"is_active":false,"resets_at":"2026-07-15T15:59:59.543708+00:00","scope":null},
+           {"kind":"weekly_scoped","group":"weekly","percent":57,"is_active":true,"resets_at":"2026-07-15T15:59:59.543963+00:00","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null}}
+         ]}
+        """.data(using: .utf8)!
+        let r = try UsageResponse.parse(json)
+        XCTAssertEqual(r.fiveHour.utilization, 2.0)
+        XCTAssertEqual(r.sevenDay.utilization, 48.0)
+        XCTAssertEqual(r.scopedWeekly?.modelName, "Fable")
+        XCTAssertEqual(r.scopedWeekly?.utilization, 57)
+        XCTAssertEqual(utc.component(.hour, from: try XCTUnwrap(r.scopedWeekly?.resetsAt)), 15)
+    }
+
+    func testNoLimitsMeansNoScopedWeekly() throws {
+        let json = #"""
+        {"five_hour":{"utilization":1,"resets_at":null},
+         "seven_day":{"utilization":2,"resets_at":null}}
+        """#.data(using: .utf8)!
+        XCTAssertNil(try UsageResponse.parse(json).scopedWeekly)
+    }
+
+    func testPrefersActiveScopedWeekly() throws {
+        let json = """
+        {"five_hour":{"utilization":1,"resets_at":null},"seven_day":{"utilization":2,"resets_at":null},
+         "limits":[
+           {"kind":"weekly_scoped","percent":10,"is_active":false,"resets_at":null,"scope":{"model":{"display_name":"Opus"}}},
+           {"kind":"weekly_scoped","percent":57,"is_active":true,"resets_at":null,"scope":{"model":{"display_name":"Fable"}}}
+         ]}
+        """.data(using: .utf8)!
+        let sw = try UsageResponse.parse(json).scopedWeekly
+        XCTAssertEqual(sw?.modelName, "Fable")
+        XCTAssertEqual(sw?.utilization, 57)
+    }
+
     func testFlexibleISO8601() {
         XCTAssertNotNil(ISO8601.flexible("2026-07-01T16:00:00.253187+00:00")) // microseconds
         XCTAssertNotNil(ISO8601.flexible("2026-07-01T16:00:00+00:00"))        // no fraction

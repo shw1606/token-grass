@@ -24,6 +24,10 @@ final class UsageService: ObservableObject {
     @Published private(set) var sevenDay: Double = 0
     @Published private(set) var fiveHourResetsAt: Date?
     @Published private(set) var sevenDayResetsAt: Date?
+    /// Per-model weekly (e.g. Fable), shown alongside the overall 7-day.
+    @Published private(set) var scopedWeekly: Double = 0
+    @Published private(set) var scopedWeeklyModel: String?
+    @Published private(set) var scopedWeeklyResetsAt: Date?
     @Published private(set) var lastSync: Date?
     @Published private(set) var grid: GrassGrid = DateGrid.makeGrid(usage: [:], weeks: 26)
     /// True while a sync is in flight AND for a short cooldown afterward — the
@@ -359,6 +363,9 @@ final class UsageService: ObservableObject {
         sevenDay = usage.sevenDay.utilization
         fiveHourResetsAt = usage.fiveHour.resetsAt
         sevenDayResetsAt = usage.sevenDay.resetsAt
+        scopedWeekly = usage.scopedWeekly?.utilization ?? 0
+        scopedWeeklyModel = usage.scopedWeekly?.modelName
+        scopedWeeklyResetsAt = usage.scopedWeekly?.resetsAt
         let before = accumulator.state.daily
         accumulator.apply(
             utilization: usage.sevenDay.utilization,
