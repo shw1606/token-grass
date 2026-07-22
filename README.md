@@ -110,6 +110,10 @@ TokenGrass collects nothing, no account, no backend, no analytics. Your Claude
 credentials never leave your Mac; only a few KB of daily usage summary syncs
 between your own devices via iCloud. See [PRIVACY.md](PRIVACY.md).
 
+## Thanks
+
+- [@ykim919](https://github.com/ykim919) — for the feedback that led to the month-by-month **calendar view** in the Mac companion.
+
 ## License
 
 [MIT](LICENSE)
